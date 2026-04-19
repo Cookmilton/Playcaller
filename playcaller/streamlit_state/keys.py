@@ -86,6 +86,8 @@ HV_CORPUS_SOURCE = "hv_corpus_source"
 HV_REPO_USE_ALL_GAMES = "hv_repo_use_all_games"
 HV_REPO_SELECTED_GAME_IDS = "hv_repo_selected_game_ids"
 UI_HISTORICAL_NUDGE_ENABLED = "ui_historical_nudge_enabled"
+# Read-only warehouse context on Generate (FootballWarehouseClient); does not change scores.
+UI_WAREHOUSE_ADVISORY_ENABLED = "ui_warehouse_advisory_enabled"
 
 # Retroactive archived-drive replay: map cache key → list of ``ActualVsReplayComparisonRow``.
 # FIFO-capped in ``cached_comparison_rows_for_archived_drive`` (long Streamlit sessions).

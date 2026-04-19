@@ -1,0 +1,70 @@
+{
+  "header": {
+    "competitions": [
+      {
+        "id": "401test002",
+        "competitors": [
+          {
+            "id": "10",
+            "homeAway": "home",
+            "score": "14",
+            "timeouts": 2,
+            "team": {
+              "id": "10",
+              "abbreviation": "NYG",
+              "displayName": "New York Giants",
+              "shortDisplayName": "Giants"
+            }
+          },
+          {
+            "id": "14",
+            "homeAway": "away",
+            "score": "10",
+            "timeouts": 3,
+            "team": {
+              "id": "14",
+              "abbreviation": "LAR",
+              "displayName": "Los Angeles Rams",
+              "shortDisplayName": "Rams"
+            }
+          }
+        ],
+        "status": {
+          "period": 3,
+          "displayClock": "7:05",
+          "type": {"completed": false, "detail": "3rd Quarter"}
+        },
+        "situation": {
+          "down": 2,
+          "distance": 7,
+          "yardsToEndzone": 42,
+          "possession": "14",
+          "downDistanceText": "2nd & 7 at NYG 42"
+        }
+      }
+    ]
+  },
+  "drives": {
+    "previous": [
+      {
+        "id": "401test002d1",
+        "team": {"id": "10"},
+        "plays": [
+          {
+            "id": "401test002x1",
+            "type": {"text": "Rush", "id": "5"},
+            "text": "(14:22) 4 Yd Rush",
+            "statYardage": 4,
+            "participants": [
+              {
+                "athlete": {"displayName": "Devin Singletary", "jersey": "26"},
+                "type": "rusher"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "current": {}
+  }
+}

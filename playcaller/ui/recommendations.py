@@ -105,6 +105,77 @@ def _render_historical_context_note(result: dict) -> None:
         _detail_block(tech_checkbox_key="hist_ctx_technical_detail_why_note")
 
 
+def _render_warehouse_advisory_note(result: dict) -> None:
+    """Warehouse DB context (read-only); omitted when Generate did not request advisory."""
+    wa = result.get("warehouse_advisory")
+    if not isinstance(wa, dict):
+        return
+    if not wa.get("enabled"):
+        with st.expander("Warehouse history (advisory — off or unavailable)", expanded=False):
+            st.caption(str(wa.get("disclaimer") or ""))
+            for n in wa.get("notes") or []:
+                st.markdown(f"- {n}")
+            for e in wa.get("errors") or []:
+                st.markdown(f"- **Error:** {e}")
+        return
+
+    st.markdown("**Warehouse history (advisory)**")
+    st.caption(str(wa.get("disclaimer") or ""))
+    st.caption(str(wa.get("situation_summary") or ""))
+    sc = wa.get("scope_binding") or {}
+    if any(sc.get(k) for k in ("league_id", "season_id", "game_id")):
+        st.caption(
+            f"Scope: league `{sc.get('league_id') or '—'}` · season `{sc.get('season_id') or '—'}` · "
+            f"game `{sc.get('game_id') or '—'}`"
+        )
+
+    def _outcome_metrics(label: str, blob: object) -> None:
+        if not isinstance(blob, dict):
+            return
+        n = int(blob.get("total_plays") or 0)
+        if n <= 0:
+            st.caption(f"{label}: no plays in this slice.")
+            return
+        td = blob.get("touchdowns")
+        to = blob.get("turnovers")
+        st.caption(
+            f"{label}: **n={n}** plays · TD **{td}** · turnovers **{to}** "
+            "(from normalized `result_category`; small samples are noisy)."
+        )
+
+    _outcome_metrics("League/season (or broad scope) outcomes", wa.get("outcome_league_season"))
+    _outcome_metrics("Same imported game (when `warehouse_game_id` / Event ID)", wa.get("outcome_game"))
+
+    tend = wa.get("offense_team_tendency")
+    if isinstance(tend, dict) and int(tend.get("total_plays") or 0) > 0:
+        fams = tend.get("play_family_counts") or {}
+        top = sorted(fams.items(), key=lambda kv: (-int(kv[1]), kv[0]))[:5]
+        top_s = ", ".join(f"{k} {v}" for k, v in top) if top else "—"
+        st.caption(
+            f"**Offense on field** tendency (warehouse id `{tend.get('team_id')}`): "
+            f"n={tend.get('total_plays')} · top families: {top_s}"
+        )
+
+    sp = wa.get("similar_plays")
+    if isinstance(sp, dict) and sp.get("plays"):
+        n = len(sp["plays"])
+        more = " (more available)" if sp.get("has_more") else ""
+        with st.expander(f"Sample similar plays (warehouse, first {n}){more}", expanded=False):
+            st.caption("Canonical plays from the warehouse — inspect `play_family` / `outcome` for each row.")
+            st.json(sp)
+
+    notes = wa.get("notes") or []
+    if notes:
+        with st.expander("Warehouse advisory notes", expanded=False):
+            for n in notes:
+                st.markdown(f"- {n}")
+    errs = wa.get("errors") or []
+    if errs:
+        with st.expander("Warehouse query errors (debug)", expanded=False):
+            for e in errs:
+                st.code(str(e))
+
+
 def render_recommendation_panel(
     *,
     ctx: GameContext,
@@ -221,6 +292,7 @@ def render_recommendation_panel(
             )
 
             _render_historical_context_note(result)
+            _render_warehouse_advisory_note(result)
 
             # Pre-snap projection + diagram (collapsed by default for live entry — not logged).
             pred = result.get("predicted_play_result") or {}

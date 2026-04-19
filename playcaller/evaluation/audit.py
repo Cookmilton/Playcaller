@@ -211,6 +211,24 @@ def audit_record_from_recommendation(
             "run_lane": hm.get("run_lane"),
             "pass_lane": hm.get("pass_lane"),
         }
+    wa = result.get("warehouse_advisory")
+    if isinstance(wa, dict):
+        ol = wa.get("outcome_league_season")
+        og = wa.get("outcome_game")
+        tend = wa.get("offense_team_tendency")
+        sp = wa.get("similar_plays")
+        rec["warehouse_advisory"] = {
+            "enabled": bool(wa.get("enabled")),
+            "situation_summary": wa.get("situation_summary"),
+            "scope_binding": wa.get("scope_binding"),
+            "outcome_league_season_n": int(ol.get("total_plays", 0)) if isinstance(ol, dict) else None,
+            "outcome_game_n": int(og.get("total_plays", 0)) if isinstance(og, dict) else None,
+            "team_tendency_n": int(tend.get("total_plays", 0)) if isinstance(tend, dict) else None,
+            "similar_plays_returned": len(sp.get("plays", [])) if isinstance(sp, dict) else None,
+            "similar_plays_has_more": sp.get("has_more") if isinstance(sp, dict) else None,
+            "notes_headline": (wa.get("notes") or [])[:3],
+            "errors_headline": (wa.get("errors") or [])[:2],
+        }
     return rec
 
 

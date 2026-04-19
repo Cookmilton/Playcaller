@@ -36,6 +36,7 @@ from playcaller.history.repository_settings import load_history_repository_setti
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     HV_CORPUS_SOURCE,
+    LIVE_FEED_MANUAL_EVENT_FOR_ID,
     HV_REPO_SELECTED_GAME_IDS,
     HV_REPO_USE_ALL_GAMES,
     HV_SESSION_CORPUS_KEY,
@@ -43,8 +44,11 @@ from playcaller.streamlit_state.keys import (
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     UI_HISTORICAL_NUDGE_ENABLED,
+    UI_WAREHOUSE_ADVISORY_ENABLED,
     UNDO_BUNDLE,
 )
+from playcaller.warehouse.binding import build_warehouse_binding
+from football_history_warehouse.consumer import try_client_from_env
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
 from playcaller.game_situation_input import context_quarter_from_period
 from playcaller.streamlit_state.session import possession_side_radio_label
@@ -256,9 +260,26 @@ def run_generate_if_requested(
     canon = st.session_state.game
     ensure_snap_review_list_on_game(canon)
     hist_plays = resolve_historical_plays_for_generate(st.session_state)
+    wh_adv = bool(st.session_state.get(UI_WAREHOUSE_ADVISORY_ENABLED))
+    wh_client = try_client_from_env() if wh_adv else None
+    meta = canon.session_metadata if isinstance(getattr(canon, "session_metadata", None), dict) else None
+    wh_binding = (
+        build_warehouse_binding(
+            meta,
+            live_event_id=str(st.session_state.get(LIVE_FEED_MANUAL_EVENT_FOR_ID) or "").strip() or None,
+        )
+        if wh_adv
+        else None
+    )
     try:
         st.session_state.result = predictor.recommend(
-            ctx, drive_log, canon, historical_plays=hist_plays
+            ctx,
+            drive_log,
+            canon,
+            historical_plays=hist_plays,
+            warehouse_advisory=wh_adv,
+            warehouse_client=wh_client,
+            warehouse_binding=wh_binding,
         )
     except Exception as e:
         st.session_state.result = None

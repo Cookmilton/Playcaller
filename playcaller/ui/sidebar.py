@@ -82,6 +82,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
     UI_HISTORICAL_NUDGE_ENABLED,
+    UI_WAREHOUSE_ADVISORY_ENABLED,
 )
 from playcaller.streamlit_state.ui_write_guard import assign_session_state, register_ui_widget_key_bound
 from playcaller.streamlit_state.widget_backend_bridge import request_widget_hydrate_from_backend
@@ -1120,6 +1121,22 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> bool:
                 )
             if _repo.default_directory and _src != "repository" and not _loaded:
                 st.caption(f"Default folder from env: `{_repo.default_directory}` (pre-fills Game library).")
+
+            st.markdown("##### Warehouse advisory (read-only)")
+            st.caption(
+                "Fetches **normalized history** from the football warehouse (separate DB). "
+                "Shown as context only — **does not** change ranked play-family scores (unlike corpus nudge above). "
+                "Set optional keys on **session_metadata** (export JSON): "
+                "`warehouse_league_id`, `warehouse_season_id`, `warehouse_game_id`, "
+                "`warehouse_coached_team_id`, `warehouse_opponent_team_id` — or env vars in `playcaller.warehouse.binding`. "
+                "ESPN **Event ID** in the live panel maps to `espn-<id>` when `warehouse_game_id` is unset."
+            )
+            st.toggle(
+                "Show warehouse history on Generate",
+                key=UI_WAREHOUSE_ADVISORY_ENABLED,
+                help="Requires FOOTBALL_WAREHOUSE_DATABASE_URL and a valid warehouse scope.",
+            )
+            _bind_ui(UI_WAREHOUSE_ADVISORY_ENABLED)
 
     return bool(generate)
 

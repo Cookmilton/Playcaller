@@ -14,6 +14,10 @@ from .model_types import ModelOutput
 from .predicted_outcome import enrich_recommendation_dict
 from .predictors.base import Predictor
 from .state import DriveLogger
+from football_history_warehouse.consumer.client import FootballWarehouseClient
+
+from .warehouse.advisory import attach_warehouse_advisory_to_result
+from .warehouse.binding import WarehouseBinding
 
 
 class FootballPlayPredictor:
@@ -129,6 +133,10 @@ class FootballPlayPredictor:
         game: Optional[Game] = None,
         *,
         historical_plays: Optional[Sequence[NormalizedHistoricalPlay]] = None,
+        warehouse_advisory: bool = False,
+        warehouse_client: Optional[FootballWarehouseClient] = None,
+        warehouse_binding: Optional[WarehouseBinding] = None,
+        warehouse_similar_play_limit: int = 12,
     ) -> Dict[str, Any]:
         if isinstance(self._predictor, HeuristicPredictor):
             result = self._predictor.recommend(
@@ -160,5 +168,13 @@ class FootballPlayPredictor:
                 "model_output": out,
             }
         enrich_recommendation_dict(result, drive_log)
+        if warehouse_advisory:
+            attach_warehouse_advisory_to_result(
+                result,
+                game,
+                warehouse_client,
+                warehouse_binding,
+                similar_play_limit=warehouse_similar_play_limit,
+            )
         return result
 

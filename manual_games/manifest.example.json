@@ -1,0 +1,16 @@
+{
+  "league_id": "league-nfl-manual",
+  "season_id": "season-2024",
+  "season_year_label": "2024",
+  "league_name": "National Football League (manual load)",
+  "team_map": {
+    "10": "team-nyg",
+    "14": "team-lar"
+  },
+  "parser_version": "espn_game_summary_json_v1",
+  "source_system": "espn_api",
+  "games": [
+    { "path": "../tests/fixtures/espn_summary_live_synthetic.json" },
+    { "path": "../tests/fixtures/espn_summary_live_synthetic_002.json" }
+  ]
+}

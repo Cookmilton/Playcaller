@@ -42,6 +42,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_SEEN_PLAY_IDS,
     LIVE_FEED_TEAM_SCOPE,
     UI_HISTORICAL_NUDGE_ENABLED,
+    UI_WAREHOUSE_ADVISORY_ENABLED,
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
     UI_PREVIOUS_DRIVES_FILTER,
@@ -132,6 +133,8 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
         ss["ui_debug_game_context"] = False
     if UI_HISTORICAL_NUDGE_ENABLED not in ss:
         ss[UI_HISTORICAL_NUDGE_ENABLED] = bool(hist_settings.nudge_default_on)
+    if UI_WAREHOUSE_ADVISORY_ENABLED not in ss:
+        ss[UI_WAREHOUSE_ADVISORY_ENABLED] = False
     if HV_CORPUS_SOURCE not in ss:
         ss[HV_CORPUS_SOURCE] = "folder_session"
     if HV_REPO_USE_ALL_GAMES not in ss:
