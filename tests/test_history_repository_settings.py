@@ -79,6 +79,19 @@ def test_session_nudge_default_on_from_env(monkeypatch: pytest.MonkeyPatch) -> N
     assert ss[UI_HISTORICAL_NUDGE_ENABLED] is True
 
 
+def test_session_predictor_reinits_when_none_or_invalid() -> None:
+    from playcaller.engine import FootballPlayPredictor
+    from playcaller.streamlit_state.session import ensure_play_caller_session_defaults
+
+    ss_none: dict = {"predictor": None}
+    ensure_play_caller_session_defaults(ss_none)
+    assert isinstance(ss_none["predictor"], FootballPlayPredictor)
+
+    ss_bad: dict = {"predictor": "not-a-predictor"}
+    ensure_play_caller_session_defaults(ss_bad)
+    assert isinstance(ss_bad["predictor"], FootballPlayPredictor)
+
+
 def test_session_predictor_syncs_history_thresholds_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

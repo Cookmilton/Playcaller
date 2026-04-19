@@ -30,6 +30,8 @@ from playcaller.review.unified_review import (
 from playcaller.review.derived import format_field_position_sentence, format_situation_line
 from playcaller.streamlit_state.session import coached_team_espn_id_for_previous_drives
 from playcaller.ui.product_copy import (
+    REVIEW_MESSAGE_REPLAY,
+    REVIEW_MESSAGE_STORED,
     REVIEW_MODE_LABEL_LEGACY,
     REVIEW_MODE_LABEL_TRUE,
     REVIEW_SECTION_FILM_ROOM,
@@ -69,6 +71,27 @@ def _comparison_line(c: UnifiedComparison, *, show_labels: bool) -> str:
     return " · ".join(parts)
 
 
+def _comparison_strip_html(c: UnifiedComparison) -> str:
+    """Green / red / gray strip for film-room cards (fixed English labels — safe HTML)."""
+
+    def cell(label: str, v: Optional[bool]) -> str:
+        if v is True:
+            g = '<span style="color:#4ade80;font-weight:600">✓</span>'
+        elif v is False:
+            g = '<span style="color:#f87171;font-weight:600">✗</span>'
+        else:
+            g = '<span style="color:#64748b">—</span>'
+        return f"{label}: {g}"
+
+    return " · ".join(
+        [
+            cell("Run/pass", c.run_pass_match),
+            cell("Bucket", c.summary_bucket_match),
+            cell("Family", c.family_match),
+        ]
+    )
+
+
 def _breakdown_markdown(row: UnifiedReviewRow) -> str:
     d = row.breakdown_dict()
     lines = []
@@ -100,6 +123,7 @@ def render_review_sidebar_controls() -> Tuple[ReviewRowFilter, bool, bool]:
         format_func=lambda k: _drive_labels.get(str(k), str(k)),
         default=[],
         key="review_film_drive_result_filter",
+        help="**Empty selection = all drive results** (no filter). Choose one or more kinds to narrow the film room.",
     )
     kinds = tuple(str(x) for x in drive_outcomes)
     _rp_opts: Tuple[Optional[str], ...] = (None, "Run", "Pass")
@@ -137,32 +161,31 @@ def render_review_sidebar_controls() -> Tuple[ReviewRowFilter, bool, bool]:
 
 def render_mode_banner(mode: ReviewMode) -> None:
     if mode == ReviewMode.TRUE_STORED:
-        st.success(f"**{REVIEW_MODE_LABEL_TRUE}** — model output is from **Generate** time (historical).")
+        st.success(f"**{REVIEW_MODE_LABEL_TRUE}** — {REVIEW_MESSAGE_STORED}")
     elif mode == ReviewMode.LEGACY_STORED:
-        st.info(f"**{REVIEW_MODE_LABEL_LEGACY}** — timeline loaded from legacy **`recommendation_audit`** export key.")
+        st.info(f"**{REVIEW_MODE_LABEL_LEGACY}** — {REVIEW_MESSAGE_STORED}")
     elif mode == ReviewMode.REPLAY_ONLY:
-        st.warning(
-            "**This session has no stored model decisions.** Showing **replay review** using the **current** model vs recorded plays. "
-            "Retroactive only — **not** historical Generate output and **not** written to exports."
-        )
+        st.info(REVIEW_MESSAGE_REPLAY)
 
 
-def render_summary_strip(metrics: ReviewSummaryMetrics, *, mode: ReviewMode) -> None:
+def render_coaching_summary_panel(metrics: ReviewSummaryMetrics, *, mode: ReviewMode) -> None:
     mode_lbl = {
-        ReviewMode.TRUE_STORED: "Stored",
-        ReviewMode.LEGACY_STORED: "Stored (legacy)",
-        ReviewMode.REPLAY_ONLY: "Replay",
+        ReviewMode.TRUE_STORED: "Stored review (gold)",
+        ReviewMode.LEGACY_STORED: "Legacy stored review",
+        ReviewMode.REPLAY_ONLY: "Replay review",
     }.get(mode, str(mode.value))
-    st.markdown(f"### Summary · **{mode_lbl}** mode")
-    c1, c2, c3, c4, c5 = st.columns(5)
+    st.markdown("### Coaching report")
+    st.caption(f"**Active mode:** {mode_lbl} — stored vs replay are **never mixed** in one row.")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Plays in view", metrics.total_rows)
-    c2.metric("With logged actual", metrics.rows_with_actual)
+    c2.metric("Drives", metrics.drives_with_rows)
     c3.metric("Run/pass match", _pct(metrics.run_pass_match_rate))
     c4.metric("Bucket match", _pct(metrics.bucket_match_rate))
-    c5.metric("Correct direction", _pct(metrics.direction_match_rate))
+    c5.metric("Direction", _pct(metrics.direction_match_rate))
+    c6.metric("High-conf agree", _pct(metrics.high_confidence_agreement_rate))
     fam = metrics.family_match_rate
     if fam is not None:
-        st.caption(f"Family match rate (where comparable): **{_pct(fam)}**")
+        st.caption(f"Family match (where comparable): **{_pct(fam)}** · High-conf = snaps with **≥60%** model confidence where run/pass & bucket both scored.")
 
 
 def render_quick_insights_block(rows: Sequence[UnifiedReviewRow]) -> None:
@@ -185,8 +208,19 @@ def _drive_header(game: Game, drive_id: int, group: Sequence[UnifiedReviewRow]) 
     suffix = ""
     if res:
         suffix = f" · {res.headline}"
-    nplays = len(getattr(dr, "plays", None) or [])
-    return f"{base}{suffix} · {nplays} logged play(s)"
+    plays = getattr(dr, "plays", None) or []
+    nplays = len(plays)
+    net_yards = sum(int(getattr(p, "yards_gained", 0) or 0) for p in plays)
+    elapsed = int(getattr(dr, "time_elapsed_seconds", 0) or 0)
+    if not elapsed and nplays:
+        elapsed = 38 * nplays
+    m, s = divmod(max(0, elapsed), 60)
+    time_s = f"~{m}:{s:02d} game clock" if elapsed else ""
+    yards_s = f"{net_yards:+d} yds" if nplays else "0 yds"
+    bits = [f"{base}{suffix}", f"{nplays} plays", yards_s]
+    if time_s:
+        bits.append(time_s)
+    return " · ".join(bits)
 
 
 def _render_play_card(
@@ -252,10 +286,10 @@ def _render_play_card(
         if row.chain_error:
             st.caption(f"Chain: _{html.escape(row.chain_error)}_")
 
-    cmp_txt = html.escape(_comparison_line(row.comparison, show_labels=True))
+    cmp_html = _comparison_strip_html(row.comparison)
     st.markdown(
         f"<div style='font-size:13px;margin-top:8px;padding:8px 10px;border-radius:8px;"
-        f"background:rgba(255,255,255,0.04)'><strong>Comparison</strong> · {cmp_txt}</div>"
+        f"background:rgba(255,255,255,0.04)'><strong>Comparison</strong> · {cmp_html}</div>"
         f"{tags_html}",
         unsafe_allow_html=True,
     )
@@ -278,7 +312,7 @@ def render_film_room(
     metrics = compute_review_summary_metrics(filtered)
 
     render_mode_banner(mode)
-    render_summary_strip(metrics, mode=mode)
+    render_coaching_summary_panel(metrics, mode=mode)
     render_quick_insights_block(filtered)
 
     st.divider()
@@ -286,7 +320,16 @@ def render_film_room(
     st.caption(f"**{len(filtered)}** play card(s) after filters (from **{len(rows)}** total).")
 
     if not filtered:
-        st.info("No plays match filters — widen filters in the sidebar.")
+        if not rows:
+            if mode == ReviewMode.REPLAY_ONLY:
+                st.info(
+                    "**No replay rows** — if you expected cards here, try **Possession filter → Both**, "
+                    "or confirm drives have logged plays and replay did not skip them (see any replay/chain messages on cards)."
+                )
+            else:
+                st.info("No review rows to display.")
+        else:
+            st.info("No plays match filters — widen filters in the sidebar (empty **Drive result** = all outcomes).")
         return
 
     by_drive = group_unified_rows_by_drive(filtered)

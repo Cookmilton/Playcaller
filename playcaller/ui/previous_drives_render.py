@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import json
 
 import streamlit as st
 
@@ -24,41 +23,30 @@ from playcaller.streamlit_state.session import coached_team_espn_id_for_previous
 from playcaller.ui.product_copy import CAPTION_POST_DRIVE_REPLAY, SECTION_DRIVE_ARCHIVE
 
 
-def _comparison_row_pretty_json(row: ActualVsReplayComparisonRow) -> str | None:
-    try:
-        d = row.to_dict()
-        if not isinstance(d, dict):
-            return None
-        return json.dumps(d, indent=2, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        return None
-
-
-def _render_comparison_technical_detail(
+def _render_comparison_breakdown(
     r: ActualVsReplayComparisonRow,
     *,
     widget_key_prefix: str,
 ) -> None:
-    """
-    Show full structured comparison payload. Must not use ``st.expander`` here: the drive list is
-    already inside an outer expander, and Streamlit does not support nested expanders.
-    """
-    caption = "Analysis-ready dict — **not** export timeline; replay is **retroactive** only."
-    key = f"{widget_key_prefix}_tech_json_p{r.play_index}"
-    payload = _comparison_row_pretty_json(r)
-    if payload is None:
-        st.caption("No comparison JSON available for this play.")
+    """Readable fields only (no raw JSON). Nested expanders are avoided — checkbox toggles body."""
+    key = f"{widget_key_prefix}_breakdown_p{r.play_index}"
+    if not st.checkbox("Breakdown", key=key, value=False):
         return
-
-    popover = getattr(st, "popover", None)
-    if callable(popover):
-        with popover("Technical detail (comparison JSON)"):
-            st.caption(caption)
-            st.code(payload, language="json")
-    else:
-        if st.checkbox("Technical detail (comparison JSON)", key=key, value=False):
-            st.caption(caption)
-            st.code(payload, language="json")
+    pre = r.pre_snap_context
+    m = r.model_replay_structured
+    conf = m.confidence if m is not None else None
+    conf_s = f"{conf:.0%}" if conf is not None else "—"
+    st.markdown(
+        f"- **actual_bucket:** `{html.escape(r.actual_summary_bucket or '—')}`\n"
+        f"- **replay_bucket:** `{html.escape(r.replay_summary_bucket or '—')}`\n"
+        f"- **down / distance:** {pre.down} & {pre.distance}\n"
+        f"- **field:** {html.escape(pre.territory)} {pre.yardline}\n"
+        f"- **quarter / clock:** Q{pre.quarter} · {pre.seconds_remaining // 60}:{pre.seconds_remaining % 60:02d} left in period\n"
+        f"- **run/pass:** actual `{r.actual_run_pass or '—'}` · replay `{r.model_run_pass or '—'}`\n"
+        f"- **matches:** run/pass `{r.run_pass_match}` · bucket `{r.coarse_bucket_match}` · family `{r.family_match}`\n"
+        f"- **replay confidence:** {conf_s}\n"
+    )
+    st.caption("Replay is **retroactive** only — not stored Generate-time truth.")
 
 
 def render_drive_archive_with_replay(
@@ -178,7 +166,7 @@ def _render_comparison_table(
                 f"{detail_html}{badge_row}",
                 unsafe_allow_html=True,
             )
-            _render_comparison_technical_detail(r, widget_key_prefix=widget_key_prefix)
+            _render_comparison_breakdown(r, widget_key_prefix=widget_key_prefix)
         with c2:
             if r.replay_error:
                 st.markdown(

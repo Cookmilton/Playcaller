@@ -4,37 +4,49 @@
 
 1. **`TRUE_STORED`** — Upload (or session) has a non-empty **`snap_review_log`** list. Model side is **Generate-time** history (`is_historical=True`, `is_replay=False`).
 2. **`LEGACY_STORED`** — Timeline rows came from **`recommendation_audit`** only in the JSON file (empty or missing `snap_review_log`). Same row builder as true stored; labeling differs.
-3. **`REPLAY_ONLY`** — No non-superseded timeline rows, but **`game.drives` have logged plays**. Model side is **retroactive replay** (`is_replay=True`, `is_historical=False`). Never written to exports as truth.
-4. **`NOT_REVIEWABLE`** — No plays and no timeline. Hard stop.
+3. **`REPLAY_ONLY`** — No non-superseded timeline rows, but **`game.drives` have logged plays**. Model side is **retroactive replay** (`is_replay=True`, `is_historical=False`). Never written to exports as truth. **First-class** in the UI (not a degraded mode).
+4. **`NOT_REVIEWABLE`** — No plays and no timeline. Operator message: `REVIEW_MESSAGE_NONE` (no plays to review).
 
-Resolution: `playcaller.review.unified_review.resolve_review_mode`.
+Resolution: `playcaller.review.unified_review.resolve_review_mode`. **Stored and replay data are never mixed** in a single `UnifiedReviewRow`.
 
-## Rendering model
+## Main console sidebar (workflow)
 
-- **`UnifiedReviewRow`** (`playcaller/review/unified_review.py`): single contract for the UI — pre-snap dict, actual headline/detail (operator formatting), model headline/subline, **`UnifiedComparison`** (run/pass, summary bucket, family), confidence when known, breakdown via **`breakdown_dict()`** (key fields only, no full raw JSON).
-- **Film room UI**: `playcaller/ui/review_film_room.py` — summary metrics, quick insights, drive expanders, two-column play cards, comparison strip, **Breakdown** expander, sidebar filters.
+Order in `playcaller/ui/sidebar.py`:
 
-## UX changes
+1. **Session** — identity (team, opponent, date, sim/real), status chips (`Game loaded` / sync), **Load JSON** + **New game**.
+2. **Live Game · ESPN** — expanded by default; long help in a nested “What ESPN updates” expander; **Sync from ESPN** remains primary.
+3. **Play Calls** — presets, quick adjust, possession/score, defense chips, **Generate** form + **Undo last play**, fine-tune expander, end-drive controls.
+4. **Review & Export** — `_sidebar_export_review_status`: stored row count, replay available, export mode line; footer still holds **Download game JSON** after main console (fresh Generate rows).
+5. **Advanced** — game-context debug toggle, corpus nudge (historical influence).
 
-- **Summary strip**: play count, logged actual count, run/pass match %, bucket match %, “correct direction” (= run/pass match), optional family rate caption.
-- **Quick insights**: lightweight bullets (model vs actual pass rate, best/worst situation bucket by match rate).
-- **Filters (sidebar)**: drive result kind, actual run/pass, our/opponent/both, mismatches-only / matches-only, confidence emphasis, breakdown default expanded.
-- **Mismatch styling**: border color by `match_strength` (strong / partial / mismatch / neutral); optional heuristic tags (e.g. short-yardage pass vs run).
-- **Copy**: Replay mode uses an explicit warning (no stored decisions); **not** the old “session is not reviewable” when plays exist. Export sidebar caption explains stored vs replay-capable files (`SIDEBAR_CAPTION_EXPORT_REVIEW`).
+## Film room UI (`playcaller/ui/review_film_room.py`)
 
-## Data integrity
+- **Coaching report** — plays in view, **drives** count, run/pass & bucket & direction match %, **high-confidence agreement** (≥60% conf snaps where run/pass and bucket both scored).
+- **Quick insights** — pass-rate delta, early-down bias heuristic, best/worst down & distance by bucket match.
+- **Drive headers** — team/drive #, result, play count, net yards, ~elapsed clock.
+- **Cards** — actual vs model; colored **comparison strip** (match vs miss); mismatch tags (including too aggressive / conservative heuristics).
+- **Breakdown** expander — normalized fields from `UnifiedReviewRow.breakdown_dict()` (includes `confidence` when known).
+- **Filters** — sidebar: drive result, actual run/pass, possession scope, mismatch/match toggles, confidence emphasis, breakdown default.
 
-- No fabrication of `snap_review_log`.
-- Replay remains **view-only**; exports unchanged by Review Session.
-- Labels **STORED MODEL** vs **REPLAY MODEL** on cards.
+## Archived drives (`playcaller/ui/previous_drives_render.py`)
+
+- **Breakdown** checkbox per play replaces “Technical detail (comparison JSON)” — actual/replay buckets, field, match flags, confidence; no raw JSON dump.
+
+## Copy (`playcaller/ui/product_copy.py`)
+
+- `REVIEW_MESSAGE_STORED`, `REVIEW_MESSAGE_REPLAY`, `REVIEW_MESSAGE_NONE` — aligned with operator messaging in Review Session and mode banners.
+
+## Replay taxonomy
+
+- `playcaller/replay/replay_taxonomy.py` — punt / FG / two-point labeled under **special teams / …** where applicable for clearer buckets.
 
 ## Tests
 
-- `tests/test_unified_review.py`: mode resolution, audit row build, filters, grouping, metrics, `model_summary_bucket_from_audit_row` smoke.
+- `tests/test_unified_review.py` — mode resolution, filters, grouping, metrics (**`drives_with_rows`**, summary rates), taxonomy smoke.
 
 ## Limitations / next steps
 
-- Replay requires a **`predictor`** in `st.session_state` (open main console once); otherwise rows are empty and a warning is shown.
-- **Team filter** depends on `feed_team_espn_id` + coached team when possible; unknown side may be excluded under our/opp filters.
-- Optional: restore a compact **single-snap navigator** for power users; optional **juxtaposed JSON** for audit vs replay (removed from the main page to reduce confusion).
-- Optional: LRU/session cap for replay cache already exists elsewhere; keep an eye on long replay-only sessions.
+- **`predictor`**: session defaults **(re)create** a valid `FootballPlayPredictor` when missing or invalid.
+- **Team filter** depends on `feed_team_espn_id` + coached team when possible.
+- **Nested Streamlit expanders** (Live Game → help): if a Streamlit version disallows nesting, collapse help to a single caption.
+- Optional: main-area filter strip on Review page (currently sidebar-only); snap index jumper; debug JSON for power users behind env flag.

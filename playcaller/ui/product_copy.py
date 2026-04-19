@@ -22,6 +22,11 @@ CAPTION_POST_DRIVE_REPLAY = (
 
 # --- Sidebar -----------------------------------------------------------------
 SIDEBAR_APP_TITLE = "Play Caller"
+SIDEBAR_SECTION_SESSION = "Session"
+SIDEBAR_SECTION_LIVE_GAME = "Live Game"
+SIDEBAR_SECTION_PLAY_CALLS = "Play Calls"
+SIDEBAR_SECTION_REVIEW_EXPORT = "Review & Export"
+SIDEBAR_SECTION_ADVANCED = "Advanced"
 SIDEBAR_SECTION_PRESETS = "Presets"
 SIDEBAR_SECTION_QUICK_ADJUST = "Quick adjust"
 SIDEBAR_SECTION_DRIVE_SESSION = "Drive & session"
@@ -45,6 +50,14 @@ REVIEW_SECTION_FILM_ROOM = "Film room — play-by-play"
 REVIEW_MODE_LABEL_TRUE = "Stored review (snap review log)"
 REVIEW_MODE_LABEL_LEGACY = "Stored review (legacy audit export)"
 REVIEW_MODE_LABEL_REPLAY = "Replay review (current model vs actual)"
+REVIEW_MESSAGE_STORED = (
+    "**Stored model decisions found.** True snap-by-snap review (Generate-time output vs logged actual)."
+)
+REVIEW_MESSAGE_REPLAY = (
+    "**No stored model decisions in this file.** Showing **replay analysis** — **current** model vs recorded plays "
+    "(fully functional; not historical Generate truth)."
+)
+REVIEW_MESSAGE_NONE = "**No plays available to review.** Log plays or export a session with a snap timeline."
 REVIEW_SECTION_ARCHIVED_REPLAY = "Archived drive: Generate-time vs model replay"
 REVIEW_CAPTION_ARCHIVED_REPLAY = (
     "Compare **`snap_review_log`** (what the engine said at **Generate** time) with **retroactive** "

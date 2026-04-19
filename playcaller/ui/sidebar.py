@@ -1,7 +1,8 @@
-"""Play Caller sidebar — presets, fine tune, drive/session, ESPN live, generate form."""
+"""Play Caller sidebar — workflow-first: session, live ESPN, play calls, export status, advanced."""
 
 from __future__ import annotations
 
+import html
 import json
 
 import streamlit as st
@@ -18,7 +19,7 @@ from playcaller.evaluation.snap_review_lifecycle import ensure_snap_review_list_
 from playcaller.history.repository_manifest import list_game_records
 from playcaller.history.repository_paths import resolve_history_repository_root
 from playcaller.history.repository_settings import load_history_repository_settings
-from playcaller.session_game_metadata import game_json_export_hint_caption
+from playcaller.session_game_metadata import game_json_export_hint_caption, session_metadata_warnings
 from playcaller.game import (
     DRIVE_END_FIELD_GOAL,
     DRIVE_END_FIELD_GOAL_MISS,
@@ -49,6 +50,7 @@ from playcaller.services.game_controller import (
     on_ui_weather_changed,
     preset_snap_only,
     preset_two_minute_drill,
+    undo_last_logged_play,
 )
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
@@ -57,6 +59,7 @@ from playcaller.streamlit_state.keys import (
     GAME_QUARTER_CLOCK_SECS,
     GAME_SCORE_OURS,
     GAME_SCORE_THEIRS,
+    UNDO_BUNDLE,
     HV_CORPUS_SOURCE,
     HV_SESSION_CORPUS_KEY,
     HV_SESSION_CORPUS_PATH_KEY,
@@ -105,10 +108,15 @@ from playcaller.ui.helpers import fmt_local_epoch
 from playcaller.ui.product_copy import (
     SIDEBAR_APP_TITLE,
     SIDEBAR_CAPTION_EXPORT_REVIEW,
+    SIDEBAR_SECTION_ADVANCED,
     SIDEBAR_SECTION_DRIVE_SESSION,
     SIDEBAR_SECTION_EXPORT,
+    SIDEBAR_SECTION_LIVE_GAME,
+    SIDEBAR_SECTION_PLAY_CALLS,
     SIDEBAR_SECTION_PRESETS,
     SIDEBAR_SECTION_QUICK_ADJUST,
+    SIDEBAR_SECTION_REVIEW_EXPORT,
+    SIDEBAR_SECTION_SESSION,
 )
 
 
@@ -117,449 +125,150 @@ def _bind_ui(k: str) -> None:
     register_ui_widget_key_bound(k)
 
 
+def _sidebar_export_review_status(game: Game) -> None:
+    """Compact export/review capability for operators (download still runs after main console)."""
+    from playcaller.review.snap_review import review_timeline_rows
+    from playcaller.review.unified_review import count_logged_plays
+
+    raw_audit = list(game.recommendation_audit or [])
+    n_snap = len(review_timeline_rows(raw_audit))
+    n_plays = count_logged_plays(game)
+    replay_ok = n_plays > 0
+    if n_snap:
+        mode = "Full review (stored snap timeline)"
+    elif replay_ok:
+        mode = "Replay-only (plays on disk, no snap log)"
+    else:
+        mode = "No review yet"
+    st.markdown(f"**Stored review rows:** {n_snap}")
+    st.markdown(f"**Replay review available:** {'Yes' if replay_ok else 'No'}")
+    st.caption(f"**Export mode:** {mode}.")
+    st.caption(SIDEBAR_CAPTION_EXPORT_REVIEW)
+
+
 def render_sidebar(*, game: Game, drive_log: DriveLogger) -> bool:
     """Draw the sidebar; returns whether the sidebar **Generate** form was submitted this run."""
     generate = False
     with st.sidebar:
 
         st.markdown(f"### {SIDEBAR_APP_TITLE}")
-        st.caption("Presets → **Generate**. Fine-tune when needed.")
-        st.caption(
-            "**Presets** adjust the **current snap** only (field + down & distance; the 2-min chip also sets clock/mode). "
-            "They do **not** clear **completed drives** or engine score — use **New game** for a full reset."
+        st.caption("**Sideline workflow:** session → **Live Game** → **Play Calls** → **Review & Export**.")
+
+        st.markdown(f"#### {SIDEBAR_SECTION_SESSION}")
+        meta = game.session_metadata or {}
+        team = html.escape(str(meta.get("team_name") or "").strip() or "—")
+        opp = html.escape(str(meta.get("opponent") or "").strip() or "—")
+        gd = html.escape(str(meta.get("game_date") or "").strip() or "—")
+        sim_v = meta.get("is_simulated")
+        sim_lbl = "sim" if sim_v is True else "real" if sim_v is False else "unset"
+        st.markdown(
+            f"<div style='font-size:13px;line-height:1.45'><strong>{team}</strong> vs <strong>{opp}</strong><br>"
+            f"{gd} · <em>{sim_lbl}</em></div>",
+            unsafe_allow_html=True,
         )
-        st.divider()
+        for w in session_metadata_warnings(meta)[:2]:
+            st.caption(w)
+        lf_ts = st.session_state.get(LIVE_FEED_LAST_SYNC_EPOCH)
+        lf_err = st.session_state.get(LIVE_FEED_LAST_ERROR)
+        if lf_ts:
+            st.caption(f"`Game loaded` · `Last sync ok` · {fmt_local_epoch(float(lf_ts))}")
+        elif lf_err:
+            st.caption("`Game loaded` · `Last sync failed` — fix Live Game, then re-sync.")
+        else:
+            st.caption("`Game loaded` · `Ready to sync`")
 
-        st.markdown(f"#### {SIDEBAR_SECTION_PRESETS}")
-        pcols = st.columns(2)
-        with pcols[0]:
-            if st.button("Own 25 · 1&10", use_container_width=True, key="sidebar_chip_preset_own25_1st10"):
-                preset_snap_only(territory="own", yardline=25, down=1, distance=10, rerun=True)
-        with pcols[1]:
-            if st.button("Opp 35 · 3&6", use_container_width=True, key="sidebar_chip_preset_opp35_3rd6"):
-                preset_snap_only(territory="opponents", yardline=35, down=3, distance=6, rerun=True)
-
-        pcols2 = st.columns(2)
-        with pcols2[0]:
-            if st.button("RZ · 2&7", use_container_width=True, key="sidebar_chip_preset_rz_2nd7"):
-                preset_snap_only(territory="opponents", yardline=12, down=2, distance=7, rerun=True)
-        with pcols2[1]:
-            if st.button("2-min · Q4 1:10", use_container_width=True, key="sidebar_chip_preset_twomin_q4_1_10"):
-                preset_two_minute_drill(rerun=True)
-
-        st.divider()
-        st.markdown(f"#### {SIDEBAR_SECTION_QUICK_ADJUST}")
-        st.caption("Most-used tweaks as one-tap chips.")
-
-        st.markdown("**Down / distance**")
-        dcols = st.columns(4)
-        with dcols[0]:
-            if st.button("1st", use_container_width=True, key="sidebar_chip_down_1"):
-                apply_and_rerun(ui_down=1, ui_auto_generate=True)
-        with dcols[1]:
-            if st.button("2nd", use_container_width=True, key="sidebar_chip_down_2"):
-                apply_and_rerun(ui_down=2, ui_auto_generate=True)
-        with dcols[2]:
-            if st.button("3rd", use_container_width=True, key="sidebar_chip_down_3"):
-                apply_and_rerun(ui_down=3, ui_auto_generate=True)
-        with dcols[3]:
-            if st.button("4th", use_container_width=True, key="sidebar_chip_down_4"):
-                apply_and_rerun(ui_down=4, ui_auto_generate=True)
-
-        dist_cols = st.columns(5)
-        for i, dist in enumerate([1, 3, 5, 7, 10]):
-            with dist_cols[i]:
-                if st.button(f"{dist}", use_container_width=True, key=f"sidebar_chip_to_go_{dist}"):
-                    apply_and_rerun(ui_distance=dist, ui_auto_generate=True)
-
-        st.markdown("**Territory / yardline**")
-        tcols = st.columns(2)
-        with tcols[0]:
-            if st.button("Own", use_container_width=True, key="sidebar_chip_territory_own"):
-                apply_and_rerun(ui_territory="own", ui_auto_generate=True)
-        with tcols[1]:
-            if st.button("Opp", use_container_width=True, key="sidebar_chip_territory_opp"):
-                apply_and_rerun(ui_territory="opponents", ui_auto_generate=True)
-
-        ycols = st.columns(5)
-        yard_presets = [10, 25, 35, 40, 45]
-        for i, y in enumerate(yard_presets):
-            with ycols[i]:
-                if st.button(f"{y}", use_container_width=True, key=f"sidebar_chip_yardline_{y}"):
-                    apply_and_rerun(ui_yardline=y, ui_auto_generate=True)
-
-        st.markdown("**Clock**")
-        ccols = st.columns(4)
-        with ccols[0]:
-            if st.button("15:00", use_container_width=True, key="sidebar_chip_clock_15m00s"):
-                apply_and_rerun(
-                    ui_quarter_clock_mins=15,
-                    ui_quarter_clock_secs=0,
-                    **{GAME_CLOCK_TOTAL_SECONDS: 15 * 60},
-                    ui_auto_generate=True,
-                )
-        with ccols[1]:
-            if st.button("10:00", use_container_width=True, key="sidebar_chip_clock_10m00s"):
-                apply_and_rerun(
-                    ui_quarter_clock_mins=10,
-                    ui_quarter_clock_secs=0,
-                    **{GAME_CLOCK_TOTAL_SECONDS: 10 * 60},
-                    ui_auto_generate=True,
-                )
-        with ccols[2]:
-            if st.button("5:00", use_container_width=True, key="sidebar_chip_clock_5m00s"):
-                apply_and_rerun(
-                    ui_quarter_clock_mins=5,
-                    ui_quarter_clock_secs=0,
-                    **{GAME_CLOCK_TOTAL_SECONDS: 5 * 60},
-                    ui_auto_generate=True,
-                )
-        with ccols[3]:
-            if st.button("1:10", use_container_width=True, key="sidebar_chip_clock_1m10s"):
-                apply_and_rerun(
-                    ui_quarter_clock_mins=1,
-                    ui_quarter_clock_secs=10,
-                    **{GAME_CLOCK_TOTAL_SECONDS: 70},
-                    ui_auto_generate=True,
-                )
-
-        st.markdown("**Possession**")
-        st.caption("Who has the ball for **this** drive (updates when you end a drive or use **New game**).")
-        st.radio(
-            "Offense",
-            ["Our team", "Opponent"],
-            horizontal=True,
-            key="ui_possession_side",
-            label_visibility="collapsed",
-        )
-        _bind_ui("ui_possession_side")
-        sc1, sc2 = st.columns(2)
-        with sc1:
-            st.number_input(
-                "Our score",
-                min_value=0,
-                max_value=999,
-                step=1,
-                key="ui_score_ours",
-                help="First number in **us–them** margin. **End drive** updates after TD/FG when the model scores the possession.",
-            )
-        with sc2:
-            st.number_input(
-                "Their score",
-                min_value=0,
-                max_value=999,
-                step=1,
-                key="ui_score_theirs",
-                help="Second number in **us–them**. Adjust to match the broadcast anytime.",
-            )
-        _bind_ui("ui_score_ours")
-        _bind_ui("ui_score_theirs")
-        st.caption(
-            "Scoring plays on **End drive** (TD +6 / FG +3) bump **Our**/**Their** via the next screen refresh. "
-            "Missed FG adds no points."
-        )
-
-        st.markdown("**Defense shell (fast)**")
-        fcols = st.columns(2)
-        with fcols[0]:
-            if st.button("Nickel · 7 · C3", use_container_width=True, key="sidebar_chip_def_nickel_7_c3"):
-                apply_and_rerun(
-                    ui_def_personnel="nickel",
-                    ui_box_count=7,
-                    ui_coverage_shell="cover_3",
-                    ui_safeties="single_high",
-                    ui_blitz_likely=False,
-                    ui_auto_generate=True,
-                )
-        with fcols[1]:
-            if st.button("Dime · 6 · Qtrs", use_container_width=True, key="sidebar_chip_def_dime_6_qtrs"):
-                apply_and_rerun(
-                    ui_def_personnel="dime",
-                    ui_box_count=6,
-                    ui_coverage_shell="quarters",
-                    ui_safeties="two_high",
-                    ui_blitz_likely=False,
-                    ui_auto_generate=True,
-                )
-
-        fcols2 = st.columns(2)
-        with fcols2[0]:
-            if st.button("GL · 9 · C0", use_container_width=True, key="sidebar_chip_def_gl_9_c0"):
-                apply_and_rerun(
-                    ui_def_personnel="goal_line",
-                    ui_box_count=9,
-                    ui_coverage_shell="cover_0",
-                    ui_safeties="single_high",
-                    ui_blitz_likely=True,
-                    ui_auto_generate=True,
-                )
-        with fcols2[1]:
-            if st.button("Clear defense read", use_container_width=True, key="sidebar_chip_def_clear_read"):
-                apply_and_rerun(
-                    ui_def_personnel="unknown",
-                    ui_box_count=7,
-                    ui_coverage_shell="unknown",
-                    ui_safeties="unknown",
-                    ui_blitz_likely=False,
-                    ui_auto_generate=True,
-                )
-
-        st.divider()
-
-        with st.expander("Fine tune (optional)", expanded=False):
-            st.markdown("#### Down & Distance")
-            c1, c2 = st.columns(2)
-            c1.selectbox("Down", [1, 2, 3, 4], key="ui_down")
-            c2.selectbox(
-                "Distance",
-                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20],
-                key="ui_distance",
-            )
-            _bind_ui("ui_down")
-            _bind_ui("ui_distance")
-
-            st.markdown("#### Ball spot")
-            st.radio(
-                "Field side",
-                ["own", "opponents"],
-                horizontal=True,
-                format_func=lambda x: "Our side (own hash → midfield)" if x == "own" else "Their side (toward their goal)",
-                key="ui_territory",
-            )
-            st.slider(
-                "Yard line (1 = that side's goal line · 50 = midfield)",
-                1,
-                50,
-                key="ui_yardline",
-                help="Same as broadcast: **Own 25** = our25-yard line; **Opp 37** = their 37.",
-            )
-            _bind_ui("ui_territory")
-            _bind_ui("ui_yardline")
-
-            st.markdown("#### Defensive Read")
-            st.selectbox(
-                "Personnel",
-                ["unknown", "nickel", "base", "dime", "goal_line"],
-                format_func=lambda x: x.replace("_", " ").title(),
-                key="ui_def_personnel",
-            )
-            st.slider("Box count", 4, 9, key="ui_box_count", format="%d in box")
-            st.selectbox(
-                "Coverage",
-                ["unknown", "cover_0", "cover_1", "cover_2", "cover_3", "cover_4", "quarters"],
-                format_func=lambda x: x.replace("_", " ").upper() if x != "unknown" else "Unknown",
-                key="ui_coverage_shell",
-            )
-            st.selectbox(
-                "Safeties",
-                ["unknown", "single_high", "two_high"],
-                format_func=lambda x: x.replace("_", " ").title(),
-                key="ui_safeties",
-            )
-            st.toggle("Blitz expected", key="ui_blitz_likely")
-            _bind_ui("ui_def_personnel")
-            _bind_ui("ui_box_count")
-            _bind_ui("ui_coverage_shell")
-            _bind_ui("ui_safeties")
-            _bind_ui("ui_blitz_likely")
-
-            st.markdown("#### Game clock (in this period)")
-            st.selectbox(
-                "Period",
-                [1, 2, 3, 4, 5],
-                format_func=period_display_label,
-                key="ui_game_period",
-                help="**OT** is stored as period 5; the engine still sees **Q4** for overtime snaps (same heuristics).",
-            )
-            _bind_ui("ui_game_period")
-            st.caption(
-                "Time remaining **in the current quarter** (e.g. Q2 · 9:32 left). "
-                "This matches how the play-calling model thinks about clock pressure."
-            )
-            cm1, cm2 = st.columns(2)
-            with cm1:
-                st.slider("Minutes left in quarter", 0, 15, key="ui_quarter_clock_mins")
-            with cm2:
-                st.slider("Seconds (add to minutes)", 0, 59, key="ui_quarter_clock_secs")
-            _bind_ui("ui_quarter_clock_mins")
-            _bind_ui("ui_quarter_clock_secs")
-
-            c5, c6 = st.columns(2)
-            c5.selectbox("Own TOs", [0, 1, 2, 3], key="ui_own_tos")
-            c6.selectbox("Opp TOs", [0, 1, 2, 3], key="ui_opp_tos")
-            _bind_ui("ui_own_tos")
-            _bind_ui("ui_opp_tos")
-
-            st.markdown("#### Extras")
-            st.selectbox(
-                "Weather",
-                ["clear", "wind", "rain", "snow"],
-                key="ui_weather",
-                on_change=on_ui_weather_changed,
-            )
-            st.slider("Wind (mph)", 0, 40, key="ui_wind_mph")
-            st.toggle("QB limited", key="ui_qb_limited")
-            st.selectbox(
-                "Override mode",
-                ["normal", "must_score", "drain_clock", "two_minute", "two_point"],
-                format_func=lambda x: x.replace("_", " ").title(),
-                key="ui_game_mode",
-            )
-            st.text_input("Mismatch note", placeholder="Optional…", key="ui_mismatch")
-            _bind_ui("ui_weather")
-            _bind_ui("ui_wind_mph")
-            _bind_ui("ui_qb_limited")
-            _bind_ui("ui_game_mode")
-            _bind_ui("ui_mismatch")
-
-        st.divider()
-
-        st.markdown(f"#### {SIDEBAR_SECTION_DRIVE_SESSION}")
-        st.caption(
-            "**End drive** archives plays to game history, flips possession when appropriate, burns clock, "
-            "then starts a fresh series — same as broadcast “next possession.”"
-        )
-        if st.button(
-            "End drive & next series",
-            type="primary",
-            use_container_width=True,
-            key="sidebar_btn_end_drive_next",
-        ):
-            archive_current_drive_and_reset_session()
-            st.rerun()
-
-        st.caption("**One-tap end** (overrides the dropdown for that archive only):")
-        er1, er2, er3 = st.columns(3)
-        with er1:
-            if st.button("End · Auto", use_container_width=True, key="sidebar_quick_end_auto"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_UI_AUTO)
-                st.rerun()
-            if st.button("End · Punt", use_container_width=True, key="sidebar_quick_end_punt"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_PUNT)
-                st.rerun()
-            if st.button("End · TD", use_container_width=True, key="sidebar_quick_end_td"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TOUCHDOWN)
-                st.rerun()
-        with er2:
-            if st.button("End · FG", use_container_width=True, key="sidebar_quick_end_fg"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL)
-                st.rerun()
-            if st.button("End · FG miss", use_container_width=True, key="sidebar_quick_end_fg_miss"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL_MISS)
-                st.rerun()
-            if st.button("End · INT", use_container_width=True, key="sidebar_quick_end_int"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_INT)
-                st.rerun()
-        with er3:
-            if st.button("End · Fum", use_container_width=True, key="sidebar_quick_end_fum"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_FUMBLE)
-                st.rerun()
-            if st.button("End · TOD", use_container_width=True, key="sidebar_quick_end_tod"):
-                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_ON_DOWNS)
-                st.rerun()
-
-        st.selectbox(
-            "When you use **End drive & next** (not the one-tap row):",
-            options=list(DRIVE_END_UI_OPTIONS),
-            format_func=lambda k: DRIVE_END_UI_LABELS.get(str(k), str(k)),
-            key="ui_drive_end_on_new",
-            help=(
-                "**Auto** uses TDs, turnovers, turnover on downs (from last snap), and field goals when obvious; "
-                "otherwise it labels the drive as a punt."
-            ),
-        )
-        _bind_ui("ui_drive_end_on_new")
-        snap_hint = (
-            f"**{len(drive_log.results)}** play(s) on this drive — end the drive when the series is over."
-            if drive_log.results
-            else "No plays on this drive yet — **End drive** only clears the call sheet."
-        )
-        st.caption(snap_hint)
-
-        st.caption(
-            "**Download game JSON** appears at the **bottom of this sidebar** after the live console runs "
-            "so exports include the latest **Generate** rows."
-        )
-        st.toggle(
-            "Show game-context debug",
-            key="ui_debug_game_context",
-            help="When on, surfaces tendencies and history fed into recommendations (model meta).",
-        )
-        st.caption(
-            "Each **Generate** stores the model’s call in this session’s **snap review log** (exported as "
-            "`snap_review_log` / `recommendation_audit` in game JSON) and links it when you **Log result**."
-        )
-        _bind_ui("ui_debug_game_context")
         up = st.file_uploader(
             "Load game JSON",
             type=["json"],
             key="sidebar_game_json_upload",
-            help="Replaces the scoreboard and completed drives. The in-progress drive log is cleared.",
+            help="Replaces scoreboard and completed drives; clears the in-progress drive log.",
         )
-        if st.button(
-            "Load uploaded game",
-            use_container_width=True,
-            key="sidebar_btn_load_game_json",
-            disabled=up is None,
-        ):
-            if up is not None:
-                try:
-                    raw = up.getvalue().decode("utf-8")
-                except UnicodeDecodeError:
-                    st.error("That file is not valid UTF-8 text.")
-                else:
-                    try:
-                        payload = json.loads(raw)
-                    except json.JSONDecodeError as e:
-                        st.error(f"Invalid JSON (parse error): {e}")
-                    else:
-                        if not isinstance(payload, dict):
-                            st.error("JSON root must be an object (e.g. { \"game_id\": ... }).")
-                        else:
-                            try:
-                                g_load = game_from_dict(payload)
-                                ensure_snap_review_list_on_game(g_load)
-                                st.session_state.game = g_load
-                            except (TypeError, ValueError, KeyError) as e:
-                                st.error(f"JSON shape not compatible with a saved game: {e}")
-                            except Exception as e:
-                                st.error(f"Could not restore game: {e}")
-                            else:
-                                g0 = st.session_state.game
-                                gq = max(1, min(5, int(getattr(g0, "quarter", 1) or 1)))
-                                raw_clk = int(getattr(g0, "clock_seconds_remaining", 0) or 0)
-                                sec = clamp_quarter_clock_seconds(gq, raw_clk)
-                                st.session_state[GAME_PERIOD] = gq
-                                st.session_state[GAME_QUARTER_CLOCK_MINS] = sec // 60
-                                st.session_state[GAME_QUARTER_CLOCK_SECS] = sec % 60
-                                st.session_state[GAME_SCORE_OURS] = int(g0.offense_points)
-                                st.session_state[GAME_SCORE_THEIRS] = int(g0.defense_points)
-                                request_widget_hydrate_from_backend(st.session_state)
-                                st.session_state[PENDING_END_DRIVE_UI] = {
-                                    "ui_possession_side": possession_side_radio_label(
-                                        possession=str(g0.possession)
-                                    ),
-                                }
-                                drive_log.reset()
-                                st.session_state.result = None
-                                st.session_state.last_play_summary = ""
-                                clear_in_progress_log_state(st.session_state)
-                                clear_live_feed_session_keys(st.session_state)
-                                clear_coached_team_espn_session_identity(st.session_state)
-                                aud = getattr(g0, "recommendation_audit", None) or []
-                                mx = max((int(r.get("drive_epoch", 0)) for r in aud), default=-1)
-                                st.session_state.eval_drive_epoch = mx + 1
-                                hydrate_session_setup_widgets(st.session_state, g0)
-                                st.toast("Loaded game from JSON.")
-                                st.rerun()
-
-        with st.expander("Live game data (ESPN)", expanded=False):
-            st.caption(
-                "Uses ESPN’s public **Site API** (not affiliated). Updates **clock, score, possession, field, down & distance** "
-                "into the same widgets the OC already uses. Optional **import** toggles (below) merge **completed drives** and the "
-                "**current possession** play list into the board and drive log. **Lock situation** skips field/down sync and also "
-                "skips merging the current drive’s feed plays. Use **locks** when the feed is late or wrong."
+        c_load, c_new = st.columns(2)
+        with c_load:
+            load_clicked = st.button(
+                "Load JSON",
+                use_container_width=True,
+                key="sidebar_btn_load_game_json",
+                disabled=up is None,
             )
+        with c_new:
+            new_clicked = st.button("New game", use_container_width=True, key="sidebar_btn_new_game_top")
+        if load_clicked and up is not None:
+            try:
+                raw = up.getvalue().decode("utf-8")
+            except UnicodeDecodeError:
+                st.error("That file is not valid UTF-8 text.")
+            else:
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError as e:
+                    st.error(f"Invalid JSON (parse error): {e}")
+                else:
+                    if not isinstance(payload, dict):
+                        st.error('JSON root must be an object (e.g. { "game_id": ... }).')
+                    else:
+                        try:
+                            g_load = game_from_dict(payload)
+                            ensure_snap_review_list_on_game(g_load)
+                            st.session_state.game = g_load
+                        except (TypeError, ValueError, KeyError) as e:
+                            st.error(f"JSON shape not compatible with a saved game: {e}")
+                        except Exception as e:
+                            st.error(f"Could not restore game: {e}")
+                        else:
+                            g0 = st.session_state.game
+                            gq = max(1, min(5, int(getattr(g0, "quarter", 1) or 1)))
+                            raw_clk = int(getattr(g0, "clock_seconds_remaining", 0) or 0)
+                            sec = clamp_quarter_clock_seconds(gq, raw_clk)
+                            st.session_state[GAME_PERIOD] = gq
+                            st.session_state[GAME_QUARTER_CLOCK_MINS] = sec // 60
+                            st.session_state[GAME_QUARTER_CLOCK_SECS] = sec % 60
+                            st.session_state[GAME_SCORE_OURS] = int(g0.offense_points)
+                            st.session_state[GAME_SCORE_THEIRS] = int(g0.defense_points)
+                            request_widget_hydrate_from_backend(st.session_state)
+                            st.session_state[PENDING_END_DRIVE_UI] = {
+                                "ui_possession_side": possession_side_radio_label(
+                                    possession=str(g0.possession)
+                                ),
+                            }
+                            drive_log.reset()
+                            st.session_state.result = None
+                            st.session_state.last_play_summary = ""
+                            clear_in_progress_log_state(st.session_state)
+                            clear_live_feed_session_keys(st.session_state)
+                            clear_coached_team_espn_session_identity(st.session_state)
+                            aud = getattr(g0, "recommendation_audit", None) or []
+                            mx = max((int(r.get("drive_epoch", 0)) for r in aud), default=-1)
+                            st.session_state.eval_drive_epoch = mx + 1
+                            hydrate_session_setup_widgets(st.session_state, g0)
+                            st.toast("Loaded game from JSON.")
+                            st.rerun()
+        if new_clicked:
+            st.session_state.pop(PENDING_END_DRIVE_UI, None)
+            st.session_state.pop(PENDING_LOG_SITUATION, None)
+            st.session_state.pop(PENDING_NEW_GAME_UI, None)
+            st.session_state.game = Game.new_game()
+            drive_log.reset()
+            st.session_state[PENDING_NEW_GAME_UI] = new_game_ui_values()
+            st.session_state.result = None
+            st.session_state.last_play_summary = ""
+            st.session_state.eval_drive_epoch = 0
+            clear_in_progress_log_state(st.session_state)
+            clear_live_feed_session_keys(st.session_state)
+            clear_coached_team_espn_session_identity(st.session_state)
+            hydrate_session_setup_widgets(st.session_state, st.session_state.game)
+            st.rerun()
+
+        st.divider()
+        st.markdown(f"#### {SIDEBAR_SECTION_LIVE_GAME}")
+        st.caption("**Sync from ESPN** updates clock, score, field, and optional drive imports.")
+
+        with st.expander("Live Game · ESPN", expanded=True):
+            with st.expander("What ESPN updates (read me)", expanded=False):
+                st.caption(
+                    "Uses ESPN’s public **Site API** (not affiliated). Merges **completed drives** and **current possession** "
+                    "plays when import toggles are on. **Lock situation** skips bad feed field/down — use when the feed lags."
+                )
             if st.session_state.get(LIVE_FEED_HTTP_INSECURE_WARNING):
                 st.warning("Secure connection failed — using local insecure fallback")
             st.selectbox(
@@ -991,7 +700,385 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> bool:
                     )
                     st.json(aud)
 
-        with st.expander("Corpus nudge (optional)", expanded=False):
+        st.markdown(f"#### {SIDEBAR_SECTION_PLAY_CALLS}")
+        st.caption("Presets = **this snap only**. **New game** is under Session.")
+        st.markdown(f"##### {SIDEBAR_SECTION_PRESETS}")
+        pcols = st.columns(2)
+        with pcols[0]:
+            if st.button("Own 25 · 1&10", use_container_width=True, key="sidebar_chip_preset_own25_1st10"):
+                preset_snap_only(territory="own", yardline=25, down=1, distance=10, rerun=True)
+        with pcols[1]:
+            if st.button("Opp 35 · 3&6", use_container_width=True, key="sidebar_chip_preset_opp35_3rd6"):
+                preset_snap_only(territory="opponents", yardline=35, down=3, distance=6, rerun=True)
+
+        pcols2 = st.columns(2)
+        with pcols2[0]:
+            if st.button("RZ · 2&7", use_container_width=True, key="sidebar_chip_preset_rz_2nd7"):
+                preset_snap_only(territory="opponents", yardline=12, down=2, distance=7, rerun=True)
+        with pcols2[1]:
+            if st.button("2-min · Q4 1:10", use_container_width=True, key="sidebar_chip_preset_twomin_q4_1_10"):
+                preset_two_minute_drill(rerun=True)
+
+        st.divider()
+        st.markdown(f"#### {SIDEBAR_SECTION_QUICK_ADJUST}")
+        st.caption("Most-used tweaks as one-tap chips.")
+
+        st.markdown("**Down / distance**")
+        dcols = st.columns(4)
+        with dcols[0]:
+            if st.button("1st", use_container_width=True, key="sidebar_chip_down_1"):
+                apply_and_rerun(ui_down=1, ui_auto_generate=True)
+        with dcols[1]:
+            if st.button("2nd", use_container_width=True, key="sidebar_chip_down_2"):
+                apply_and_rerun(ui_down=2, ui_auto_generate=True)
+        with dcols[2]:
+            if st.button("3rd", use_container_width=True, key="sidebar_chip_down_3"):
+                apply_and_rerun(ui_down=3, ui_auto_generate=True)
+        with dcols[3]:
+            if st.button("4th", use_container_width=True, key="sidebar_chip_down_4"):
+                apply_and_rerun(ui_down=4, ui_auto_generate=True)
+
+        dist_cols = st.columns(5)
+        for i, dist in enumerate([1, 3, 5, 7, 10]):
+            with dist_cols[i]:
+                if st.button(f"{dist}", use_container_width=True, key=f"sidebar_chip_to_go_{dist}"):
+                    apply_and_rerun(ui_distance=dist, ui_auto_generate=True)
+
+        st.markdown("**Territory / yardline**")
+        tcols = st.columns(2)
+        with tcols[0]:
+            if st.button("Own", use_container_width=True, key="sidebar_chip_territory_own"):
+                apply_and_rerun(ui_territory="own", ui_auto_generate=True)
+        with tcols[1]:
+            if st.button("Opp", use_container_width=True, key="sidebar_chip_territory_opp"):
+                apply_and_rerun(ui_territory="opponents", ui_auto_generate=True)
+
+        ycols = st.columns(5)
+        yard_presets = [10, 25, 35, 40, 45]
+        for i, y in enumerate(yard_presets):
+            with ycols[i]:
+                if st.button(f"{y}", use_container_width=True, key=f"sidebar_chip_yardline_{y}"):
+                    apply_and_rerun(ui_yardline=y, ui_auto_generate=True)
+
+        st.markdown("**Clock**")
+        ccols = st.columns(4)
+        with ccols[0]:
+            if st.button("15:00", use_container_width=True, key="sidebar_chip_clock_15m00s"):
+                apply_and_rerun(
+                    ui_quarter_clock_mins=15,
+                    ui_quarter_clock_secs=0,
+                    **{GAME_CLOCK_TOTAL_SECONDS: 15 * 60},
+                    ui_auto_generate=True,
+                )
+        with ccols[1]:
+            if st.button("10:00", use_container_width=True, key="sidebar_chip_clock_10m00s"):
+                apply_and_rerun(
+                    ui_quarter_clock_mins=10,
+                    ui_quarter_clock_secs=0,
+                    **{GAME_CLOCK_TOTAL_SECONDS: 10 * 60},
+                    ui_auto_generate=True,
+                )
+        with ccols[2]:
+            if st.button("5:00", use_container_width=True, key="sidebar_chip_clock_5m00s"):
+                apply_and_rerun(
+                    ui_quarter_clock_mins=5,
+                    ui_quarter_clock_secs=0,
+                    **{GAME_CLOCK_TOTAL_SECONDS: 5 * 60},
+                    ui_auto_generate=True,
+                )
+        with ccols[3]:
+            if st.button("1:10", use_container_width=True, key="sidebar_chip_clock_1m10s"):
+                apply_and_rerun(
+                    ui_quarter_clock_mins=1,
+                    ui_quarter_clock_secs=10,
+                    **{GAME_CLOCK_TOTAL_SECONDS: 70},
+                    ui_auto_generate=True,
+                )
+
+        st.markdown("**Possession**")
+        st.caption("Who has the ball for **this** drive (updates when you end a drive or use **New game**).")
+        st.radio(
+            "Offense",
+            ["Our team", "Opponent"],
+            horizontal=True,
+            key="ui_possession_side",
+            label_visibility="collapsed",
+        )
+        _bind_ui("ui_possession_side")
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            st.number_input(
+                "Our score",
+                min_value=0,
+                max_value=999,
+                step=1,
+                key="ui_score_ours",
+                help="First number in **us–them** margin. **End drive** updates after TD/FG when the model scores the possession.",
+            )
+        with sc2:
+            st.number_input(
+                "Their score",
+                min_value=0,
+                max_value=999,
+                step=1,
+                key="ui_score_theirs",
+                help="Second number in **us–them**. Adjust to match the broadcast anytime.",
+            )
+        _bind_ui("ui_score_ours")
+        _bind_ui("ui_score_theirs")
+        st.caption(
+            "Scoring plays on **End drive** (TD +6 / FG +3) bump **Our**/**Their** via the next screen refresh. "
+            "Missed FG adds no points."
+        )
+
+        st.markdown("**Defense shell (fast)**")
+        fcols = st.columns(2)
+        with fcols[0]:
+            if st.button("Nickel · 7 · C3", use_container_width=True, key="sidebar_chip_def_nickel_7_c3"):
+                apply_and_rerun(
+                    ui_def_personnel="nickel",
+                    ui_box_count=7,
+                    ui_coverage_shell="cover_3",
+                    ui_safeties="single_high",
+                    ui_blitz_likely=False,
+                    ui_auto_generate=True,
+                )
+        with fcols[1]:
+            if st.button("Dime · 6 · Qtrs", use_container_width=True, key="sidebar_chip_def_dime_6_qtrs"):
+                apply_and_rerun(
+                    ui_def_personnel="dime",
+                    ui_box_count=6,
+                    ui_coverage_shell="quarters",
+                    ui_safeties="two_high",
+                    ui_blitz_likely=False,
+                    ui_auto_generate=True,
+                )
+
+        fcols2 = st.columns(2)
+        with fcols2[0]:
+            if st.button("GL · 9 · C0", use_container_width=True, key="sidebar_chip_def_gl_9_c0"):
+                apply_and_rerun(
+                    ui_def_personnel="goal_line",
+                    ui_box_count=9,
+                    ui_coverage_shell="cover_0",
+                    ui_safeties="single_high",
+                    ui_blitz_likely=True,
+                    ui_auto_generate=True,
+                )
+        with fcols2[1]:
+            if st.button("Clear defense read", use_container_width=True, key="sidebar_chip_def_clear_read"):
+                apply_and_rerun(
+                    ui_def_personnel="unknown",
+                    ui_box_count=7,
+                    ui_coverage_shell="unknown",
+                    ui_safeties="unknown",
+                    ui_blitz_likely=False,
+                    ui_auto_generate=True,
+                )
+
+        st.markdown("**Generate play call**")
+        with st.form("generate_form", clear_on_submit=False):
+            generate = st.form_submit_button(
+                "Generate play call",
+                type="primary",
+                use_container_width=True,
+                key="sidebar_form_submit_generate",
+            )
+        can_undo = bool(drive_log.results) and st.session_state.get(UNDO_BUNDLE) is not None
+        if st.button(
+            "Undo last play",
+            use_container_width=True,
+            disabled=not can_undo,
+            key="sidebar_undo_last_play",
+        ):
+            undo_last_logged_play()
+            st.rerun()
+
+        st.divider()
+
+        with st.expander("Fine tune (optional)", expanded=False):
+            st.markdown("#### Down & Distance")
+            c1, c2 = st.columns(2)
+            c1.selectbox("Down", [1, 2, 3, 4], key="ui_down")
+            c2.selectbox(
+                "Distance",
+                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20],
+                key="ui_distance",
+            )
+            _bind_ui("ui_down")
+            _bind_ui("ui_distance")
+
+            st.markdown("#### Ball spot")
+            st.radio(
+                "Field side",
+                ["own", "opponents"],
+                horizontal=True,
+                format_func=lambda x: "Our side (own hash → midfield)" if x == "own" else "Their side (toward their goal)",
+                key="ui_territory",
+            )
+            st.slider(
+                "Yard line (1 = that side's goal line · 50 = midfield)",
+                1,
+                50,
+                key="ui_yardline",
+                help="Same as broadcast: **Own 25** = our25-yard line; **Opp 37** = their 37.",
+            )
+            _bind_ui("ui_territory")
+            _bind_ui("ui_yardline")
+
+            st.markdown("#### Defensive Read")
+            st.selectbox(
+                "Personnel",
+                ["unknown", "nickel", "base", "dime", "goal_line"],
+                format_func=lambda x: x.replace("_", " ").title(),
+                key="ui_def_personnel",
+            )
+            st.slider("Box count", 4, 9, key="ui_box_count", format="%d in box")
+            st.selectbox(
+                "Coverage",
+                ["unknown", "cover_0", "cover_1", "cover_2", "cover_3", "cover_4", "quarters"],
+                format_func=lambda x: x.replace("_", " ").upper() if x != "unknown" else "Unknown",
+                key="ui_coverage_shell",
+            )
+            st.selectbox(
+                "Safeties",
+                ["unknown", "single_high", "two_high"],
+                format_func=lambda x: x.replace("_", " ").title(),
+                key="ui_safeties",
+            )
+            st.toggle("Blitz expected", key="ui_blitz_likely")
+            _bind_ui("ui_def_personnel")
+            _bind_ui("ui_box_count")
+            _bind_ui("ui_coverage_shell")
+            _bind_ui("ui_safeties")
+            _bind_ui("ui_blitz_likely")
+
+            st.markdown("#### Game clock (in this period)")
+            st.selectbox(
+                "Period",
+                [1, 2, 3, 4, 5],
+                format_func=period_display_label,
+                key="ui_game_period",
+                help="**OT** is stored as period 5; the engine still sees **Q4** for overtime snaps (same heuristics).",
+            )
+            _bind_ui("ui_game_period")
+            st.caption(
+                "Time remaining **in the current quarter** (e.g. Q2 · 9:32 left). "
+                "This matches how the play-calling model thinks about clock pressure."
+            )
+            cm1, cm2 = st.columns(2)
+            with cm1:
+                st.slider("Minutes left in quarter", 0, 15, key="ui_quarter_clock_mins")
+            with cm2:
+                st.slider("Seconds (add to minutes)", 0, 59, key="ui_quarter_clock_secs")
+            _bind_ui("ui_quarter_clock_mins")
+            _bind_ui("ui_quarter_clock_secs")
+
+            c5, c6 = st.columns(2)
+            c5.selectbox("Own TOs", [0, 1, 2, 3], key="ui_own_tos")
+            c6.selectbox("Opp TOs", [0, 1, 2, 3], key="ui_opp_tos")
+            _bind_ui("ui_own_tos")
+            _bind_ui("ui_opp_tos")
+
+            st.markdown("#### Extras")
+            st.selectbox(
+                "Weather",
+                ["clear", "wind", "rain", "snow"],
+                key="ui_weather",
+                on_change=on_ui_weather_changed,
+            )
+            st.slider("Wind (mph)", 0, 40, key="ui_wind_mph")
+            st.toggle("QB limited", key="ui_qb_limited")
+            st.selectbox(
+                "Override mode",
+                ["normal", "must_score", "drain_clock", "two_minute", "two_point"],
+                format_func=lambda x: x.replace("_", " ").title(),
+                key="ui_game_mode",
+            )
+            st.text_input("Mismatch note", placeholder="Optional…", key="ui_mismatch")
+            _bind_ui("ui_weather")
+            _bind_ui("ui_wind_mph")
+            _bind_ui("ui_qb_limited")
+            _bind_ui("ui_game_mode")
+            _bind_ui("ui_mismatch")
+
+        st.divider()
+
+        st.markdown(f"#### {SIDEBAR_SECTION_DRIVE_SESSION}")
+        st.caption(
+            "**End drive** archives plays to game history, flips possession when appropriate, burns clock, "
+            "then starts a fresh series — same as broadcast “next possession.”"
+        )
+        if st.button(
+            "End drive & next series",
+            type="primary",
+            use_container_width=True,
+            key="sidebar_btn_end_drive_next",
+        ):
+            archive_current_drive_and_reset_session()
+            st.rerun()
+
+        st.caption("**One-tap end** (overrides the dropdown for that archive only):")
+        er1, er2, er3 = st.columns(3)
+        with er1:
+            if st.button("End · Auto", use_container_width=True, key="sidebar_quick_end_auto"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_UI_AUTO)
+                st.rerun()
+            if st.button("End · Punt", use_container_width=True, key="sidebar_quick_end_punt"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_PUNT)
+                st.rerun()
+            if st.button("End · TD", use_container_width=True, key="sidebar_quick_end_td"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TOUCHDOWN)
+                st.rerun()
+        with er2:
+            if st.button("End · FG", use_container_width=True, key="sidebar_quick_end_fg"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL)
+                st.rerun()
+            if st.button("End · FG miss", use_container_width=True, key="sidebar_quick_end_fg_miss"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL_MISS)
+                st.rerun()
+            if st.button("End · INT", use_container_width=True, key="sidebar_quick_end_int"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_INT)
+                st.rerun()
+        with er3:
+            if st.button("End · Fum", use_container_width=True, key="sidebar_quick_end_fum"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_FUMBLE)
+                st.rerun()
+            if st.button("End · TOD", use_container_width=True, key="sidebar_quick_end_tod"):
+                archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_ON_DOWNS)
+                st.rerun()
+
+        st.selectbox(
+            "When you use **End drive & next** (not the one-tap row):",
+            options=list(DRIVE_END_UI_OPTIONS),
+            format_func=lambda k: DRIVE_END_UI_LABELS.get(str(k), str(k)),
+            key="ui_drive_end_on_new",
+            help=(
+                "**Auto** uses TDs, turnovers, turnover on downs (from last snap), and field goals when obvious; "
+                "otherwise it labels the drive as a punt."
+            ),
+        )
+        _bind_ui("ui_drive_end_on_new")
+        snap_hint = (
+            f"**{len(drive_log.results)}** play(s) on this drive — end the drive when the series is over."
+            if drive_log.results
+            else "No plays on this drive yet — **End drive** only clears the call sheet."
+        )
+        st.caption(snap_hint)
+
+        st.divider()
+        st.markdown(f"#### {SIDEBAR_SECTION_REVIEW_EXPORT}")
+        _sidebar_export_review_status(game)
+        st.caption("**Download game JSON** runs after the main console (footer) so exports include the latest Generate row.")
+
+        with st.expander(f"{SIDEBAR_SECTION_ADVANCED}", expanded=False):
+            st.toggle(
+                "Show game-context debug",
+                key="ui_debug_game_context",
+                help="When on, surfaces tendencies and history fed into recommendations (model meta).",
+            )
+            _bind_ui("ui_debug_game_context")
+            st.markdown("##### Corpus nudge")
             st.caption(
                 "Configure corpus on **Game library** (import to the repository or load a folder into this session). "
                 "Applies a **small** run/pass lane adjustment after the base heuristic — not a replacement model."
@@ -1034,31 +1121,6 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> bool:
             if _repo.default_directory and _src != "repository" and not _loaded:
                 st.caption(f"Default folder from env: `{_repo.default_directory}` (pre-fills Game library).")
 
-        # Avoid unnecessary full-app reruns while adjusting many inputs quickly.
-        # The form batches widget changes and only triggers on submit.
-        with st.form("generate_form", clear_on_submit=False):
-            generate = st.form_submit_button(
-                "Generate play call",
-                type="primary",
-                use_container_width=True,
-                key="sidebar_form_submit_generate",
-            )
-
-        if st.button("New game", use_container_width=True, key="sidebar_btn_new_game"):
-            st.session_state.pop(PENDING_END_DRIVE_UI, None)
-            st.session_state.pop(PENDING_LOG_SITUATION, None)
-            st.session_state.pop(PENDING_NEW_GAME_UI, None)
-            st.session_state.game = Game.new_game()
-            drive_log.reset()
-            st.session_state[PENDING_NEW_GAME_UI] = new_game_ui_values()
-            st.session_state.result = None
-            st.session_state.last_play_summary = ""
-            st.session_state.eval_drive_epoch = 0
-            clear_in_progress_log_state(st.session_state)
-            clear_live_feed_session_keys(st.session_state)
-            clear_coached_team_espn_session_identity(st.session_state)
-            hydrate_session_setup_widgets(st.session_state, st.session_state.game)
-            st.rerun()
     return bool(generate)
 
 
@@ -1118,8 +1180,5 @@ def render_sidebar_json_export() -> None:
             key="sidebar_download_game_json",
         )
         st.caption(game_json_export_hint_caption())
-        st.caption(SIDEBAR_CAPTION_EXPORT_REVIEW)
-        st.caption(
-            "Debug: **PLAYCALLER_SNAP_REVIEW_LOG=1** → file logging · "
-            "**PLAYCALLER_SNAP_REVIEW_STREAMLIT_DEBUG=1** → sidebar debug expander above."
-        )
+        if streamlit_snap_review_debug_enabled():
+            st.caption("Verbose snap-review debug is on (`PLAYCALLER_SNAP_REVIEW_STREAMLIT_DEBUG`).")

@@ -26,6 +26,7 @@ if str(_root) not in sys.path:
 
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
 from playcaller.evaluation.snap_review_lifecycle import ensure_snap_review_list_on_game
+from playcaller.engine import FootballPlayPredictor
 from playcaller.game import Game, game_from_dict
 from playcaller.streamlit_state.pending import apply_all_pending
 from playcaller.streamlit_state.session import (
@@ -41,7 +42,6 @@ from playcaller.review.unified_review import (
     ReviewMode,
     build_unified_rows_from_audit,
     build_unified_rows_from_replay,
-    count_logged_plays,
     export_review_capability_bullets,
     resolve_review_mode,
 )
@@ -49,7 +49,12 @@ from playcaller.session_game_metadata import (
     format_session_metadata_markdown,
     session_audit_identity_warning,
 )
-from playcaller.ui.product_copy import PAGE_TITLE_REVIEW, REVIEW_PAGE_TITLE, REVIEW_SECTION_SESSION_RECORD
+from playcaller.ui.product_copy import (
+    PAGE_TITLE_REVIEW,
+    REVIEW_MESSAGE_NONE,
+    REVIEW_PAGE_TITLE,
+    REVIEW_SECTION_SESSION_RECORD,
+)
 from playcaller.ui.review_film_room import render_film_room, render_review_sidebar_controls
 
 try:
@@ -132,7 +137,7 @@ def run_review_session_page() -> None:
     mode = resolve_review_mode(game, upload_payload=upload_payload, timeline=timeline)
 
     if mode == ReviewMode.NOT_REVIEWABLE:
-        st.error("**Nothing to review** — this game has no logged plays and no snap review timeline.")
+        st.warning(REVIEW_MESSAGE_NONE)
         st.stop()
 
     if source == "Upload game JSON":
@@ -154,6 +159,12 @@ def run_review_session_page() -> None:
         unified_rows = build_unified_rows_from_audit(game, timeline, mode, our_coached_espn_id=our_id)
     else:
         predictor = st.session_state.get("predictor")
+        if not isinstance(predictor, FootballPlayPredictor):
+            st.error(
+                "**Predictor unavailable** — session defaults could not build an engine instance. "
+                "Reload the app or open the main **Play Caller** page once, then return."
+            )
+            st.stop()
         ambient = build_ambient_context_for_model_replay(st.session_state, game)
         unified_rows = build_unified_rows_from_replay(
             game,
@@ -162,10 +173,6 @@ def run_review_session_page() -> None:
             ambient_ctx=ambient,
             our_coached_espn_id=our_id,
         )
-        if predictor is None and count_logged_plays(game) > 0:
-            st.warning(
-                "**Predictor not loaded** — open the main **Play Caller** page once (defaults + engine), then return here for replay rows."
-            )
 
     flt, show_conf, breakdown_expanded = render_review_sidebar_controls()
     render_film_room(

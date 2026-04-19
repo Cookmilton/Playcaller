@@ -96,17 +96,17 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
     hist_settings = load_history_repository_settings()
     hi_cfg = build_historical_influence_config(hist_settings)
 
-    if "predictor" not in ss:
+    # (Re)create when missing, None, or corrupted — e.g. Review Session replay after a partial session clear.
+    p = ss.get("predictor")
+    if not isinstance(p, FootballPlayPredictor):
         ss["predictor"] = FootballPlayPredictor(
             calibration=load_calibration_profile(),
             historical_influence=hi_cfg,
         )
     else:
-        p = ss["predictor"]
-        if isinstance(p, FootballPlayPredictor):
-            impl = getattr(p, "_impl", None)
-            if isinstance(impl, HeuristicPredictor):
-                impl.historical_influence = hi_cfg
+        impl = getattr(p, "_impl", None)
+        if isinstance(impl, HeuristicPredictor):
+            impl.historical_influence = hi_cfg
     if "drive_log" not in ss:
         ss["drive_log"] = DriveLogger()
     if "game" not in ss:

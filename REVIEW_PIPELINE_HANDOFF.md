@@ -1,5 +1,7 @@
 # Review pipeline & archived-drive comparison — handoff
 
+**See also:** [Review Session — film room & dual mode](REVIEW_SESSION_HANDOFF.md) for **`UnifiedReviewRow`**, **`resolve_review_mode`**, and the Review page UX (stored vs replay labeling, export capability copy).
+
 ## What changed
 
 1. **Previous drives (Actual column)**  
@@ -58,7 +60,7 @@ Optional: `PLAYCALLER_SNAP_REVIEW_LOG=1` for file logging; `PLAYCALLER_SNAP_REVI
 
 - Replay buckets are **heuristic**; reconstructed pre-snap for archived drives is approximate (documented overlay).  
 - **Coarse bucket match** is intentionally conservative (exact bucket match or limited run/pass agreement).  
-- Older JSON exports with empty `snap_review_log` remain non-reviewable; that is expected.
+- JSON exports with **empty** `snap_review_log` but **logged plays** on drives are still **reviewable** in **replay-only** mode on **Review Session** (`pages/Review_session.py`) — model side is current-engine replay, not historical Generate output. Only games with **no plays and no timeline** are not reviewable.
 
 ## Next step
 

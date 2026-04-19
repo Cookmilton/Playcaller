@@ -154,4 +154,5 @@ def test_summary_metrics_rates() -> None:
     u = build_unified_rows_from_audit(g, [a, a], ReviewMode.TRUE_STORED)
     m = compute_review_summary_metrics(u)
     assert m.total_rows == 2
+    assert m.drives_with_rows == 1
     assert m.family_match_rate == 1.0

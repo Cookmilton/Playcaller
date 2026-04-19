@@ -38,11 +38,11 @@ def replay_summary_bucket_from_recommend(result: Mapping[str, Any]) -> str:
     routes_txt = _norm_play_routes(play)
 
     if fam == "two_point":
-        return "special / two-point"
+        return "special teams / two-point"
     if "punt" in sit or fam == "punt":
-        return "punt"
+        return "special teams / punt"
     if "field_goal" in sit or fam == "field_goal":
-        return "field goal"
+        return "special teams / field goal"
     if fam == "screen" or "screen" in routes_txt:
         return "screen"
     if fam == "draw":

@@ -108,6 +108,7 @@ class UnifiedReviewRow:
             "is_historical": self.is_historical,
             "replay_error": self.replay_error,
             "chain_error": self.chain_error,
+            "confidence": self.confidence,
         }
 
 
@@ -279,12 +280,21 @@ def _mismatch_heuristics(
     short = dist <= 3 and down in (3, 4)
     if comparison.run_pass_match is False:
         if model_rp == "Pass" and actual_rp == "Run":
-            tags.append("Should have run" + (" (short yardage)" if short else ""))
+            if short:
+                tags.append("Short yardage: model pass vs actual run")
+            elif down <= 2:
+                tags.append("Too aggressive — early-down pass vs run")
+            else:
+                tags.append("Model pass vs actual run")
         elif model_rp == "Run" and actual_rp == "Pass":
-            tags.append("Model leaned run; actual pass")
+            tags.append("Model run vs actual pass")
+            if down >= 3:
+                tags.append("Too conservative — model run on late down")
+    if comparison.summary_bucket_match is False and model_rp == actual_rp and model_rp in ("Run", "Pass"):
+        tags.append("Same direction, different bucket (depth/scheme)")
     if comparison.family_match is False and comparison.run_pass_match is True:
         tags.append("Same run/pass, different scheme")
-    return tuple(tags[:3])
+    return tuple(tags[:4])
 
 
 def build_unified_rows_from_audit(
@@ -571,10 +581,12 @@ def filter_unified_rows(rows: Sequence[UnifiedReviewRow], flt: ReviewRowFilter) 
 class ReviewSummaryMetrics:
     total_rows: int
     rows_with_actual: int
+    drives_with_rows: int
     run_pass_match_rate: Optional[float]
     bucket_match_rate: Optional[float]
     family_match_rate: Optional[float]
     direction_match_rate: Optional[float]
+    high_confidence_agreement_rate: Optional[float]
 
 
 def compute_review_summary_metrics(rows: Sequence[UnifiedReviewRow]) -> ReviewSummaryMetrics:
@@ -593,13 +605,33 @@ def compute_review_summary_metrics(rows: Sequence[UnifiedReviewRow]) -> ReviewSu
         return num / den
 
     with_actual = sum(1 for r in rows if r.actual_headline and "No logged play" not in r.actual_headline)
+    drives_n = len({r.drive_id for r in rows})
+
+    def _high_conf_agree() -> Optional[float]:
+        num = den = 0
+        for r in rows:
+            if r.confidence is None or float(r.confidence) < 0.60:
+                continue
+            rp = r.comparison.run_pass_match
+            bk = r.comparison.summary_bucket_match
+            if rp is None or bk is None:
+                continue
+            den += 1
+            if rp and bk:
+                num += 1
+        if den == 0:
+            return None
+        return num / den
+
     return ReviewSummaryMetrics(
         total_rows=len(rows),
         rows_with_actual=with_actual,
+        drives_with_rows=drives_n,
         run_pass_match_rate=_rate(lambda r: r.comparison.run_pass_match),
         bucket_match_rate=_rate(lambda r: r.comparison.summary_bucket_match),
         family_match_rate=_rate(lambda r: r.comparison.family_match),
         direction_match_rate=_rate(lambda r: r.comparison.direction_match),
+        high_confidence_agreement_rate=_high_conf_agree(),
     )
 
 
@@ -660,6 +692,33 @@ def compute_quick_insights(rows: Sequence[UnifiedReviewRow]) -> List[str]:
         insights.append(
             f"Model **pass rate {100 * mod_p / mod_tot:.0f}%** vs actual **{100 * act_p / act_tot:.0f}%** (run/pass tagged plays only)."
         )
+
+    early_mod_p = early_mod_t = early_act_p = early_act_t = 0
+    for r in rows:
+        pre = r.pre_snap
+        try:
+            d = int(pre.get("down", 0))
+        except (TypeError, ValueError):
+            d = 0
+        if d not in (1, 2):
+            continue
+        mr = r.model_structured.get("run_pass")
+        ar = r.actual_structured.get("run_pass")
+        if mr in ("Run", "Pass"):
+            early_mod_t += 1
+            if mr == "Pass":
+                early_mod_p += 1
+        if ar in ("Run", "Pass"):
+            early_act_t += 1
+            if ar == "Pass":
+                early_act_p += 1
+    if early_mod_t >= 3 and early_act_t >= 3:
+        mp = early_mod_p / early_mod_t
+        ap = early_act_p / early_act_t
+        if mp - ap >= 0.12:
+            insights.append("**Early downs (1st–2nd):** model **over-passed** vs actual tagged run/pass.")
+        elif ap - mp >= 0.12:
+            insights.append("**Early downs:** actual was **more pass-heavy** than the model.")
 
     best = worst = None
     best_r = -1.0
