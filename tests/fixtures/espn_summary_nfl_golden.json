@@ -1,0 +1,932 @@
+{
+  "header": {
+    "competitions": [
+      {
+        "id": "401772988",
+        "competitors": [
+          {
+            "id": "17",
+            "homeAway": "home",
+            "score": "13",
+            "timeouts": null,
+            "team": {
+              "id": "17",
+              "abbreviation": "NE",
+              "displayName": "New England Patriots",
+              "shortDisplayName": null,
+              "name": "Patriots"
+            }
+          },
+          {
+            "id": "26",
+            "homeAway": "away",
+            "score": "29",
+            "timeouts": null,
+            "team": {
+              "id": "26",
+              "abbreviation": "SEA",
+              "displayName": "Seattle Seahawks",
+              "shortDisplayName": null,
+              "name": "Seahawks"
+            }
+          }
+        ],
+        "status": {
+          "type": {
+            "id": "3",
+            "name": "STATUS_FINAL",
+            "state": "post",
+            "completed": true,
+            "description": "Final",
+            "detail": "Final",
+            "shortDetail": "Final"
+          },
+          "isTBDFlex": false
+        },
+        "situation": null
+      }
+    ]
+  },
+  "drives": {
+    "previous": [
+      {
+        "id": "40177298826",
+        "description": "8 plays, 65 yards, 2:06",
+        "team": {
+          "id": "17",
+          "name": "Patriots",
+          "abbreviation": "NE",
+          "displayName": "New England Patriots",
+          "shortDisplayName": "Patriots"
+        },
+        "start": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "4:27"
+          },
+          "yardLine": 35,
+          "text": "NE 35"
+        },
+        "end": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "2:21"
+          },
+          "yardLine": 100,
+          "text": "SEA 0"
+        },
+        "timeElapsed": {
+          "displayValue": "2:06"
+        },
+        "yards": 65,
+        "isScore": true,
+        "offensivePlays": 8,
+        "result": "TD",
+        "shortDisplayResult": "TD",
+        "displayResult": "Touchdown",
+        "plays": [
+          {
+            "id": "4017729883951",
+            "type": {
+              "id": "53",
+              "text": "Kickoff",
+              "abbreviation": "K"
+            },
+            "text": "J.Myers kicks 65 yards from SEA 35 to end zone, Touchback to the NE 35.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "4:27"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729883982",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(Shotgun) D.Maye pass short middle to D.Douglas to NE 46 for 11 yards (E.Jones).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "4:27"
+            },
+            "scoringPlay": false,
+            "statYardage": 11,
+            "yardsAfterCatch": 7,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884007",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short middle to D.Douglas to SEA 46 for 8 yards (B.Mafe).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "4:08"
+            },
+            "scoringPlay": false,
+            "statYardage": 8,
+            "yardsAfterCatch": 8,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884032",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short left to A.Hooper pushed ob at SEA 41 for 5 yards (D.Witherspoon).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "3:48"
+            },
+            "scoringPlay": false,
+            "statYardage": 5,
+            "yardsAfterCatch": 1,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884072",
+            "type": {
+              "id": "8",
+              "text": "Penalty",
+              "abbreviation": "PEN"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye scrambles left guard to SEA 37 for 4 yards (N.Emmanwori).PENALTY on NE-G.Bradbury, Offensive Holding, 10 yards, enforced at SEA 41 - No Play.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "3:42"
+            },
+            "scoringPlay": false,
+            "statYardage": -10,
+            "penalty": {
+              "yards": 10,
+              "type": {
+                "slug": "offensive-holding",
+                "text": "Offensive Holding"
+              },
+              "status": {
+                "slug": "accepted",
+                "text": "Accepted"
+              }
+            },
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884105",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(Shotgun) D.Maye pass short right to R.Stevenson pushed ob at SEA 44 for 7 yards (D.Witherspoon).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "3:36"
+            },
+            "scoringPlay": false,
+            "statYardage": 7,
+            "yardsAfterCatch": 7,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884130",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short middle to H.Henry to SEA 33 for 11 yards (D.Witherspoon).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "3:28"
+            },
+            "scoringPlay": false,
+            "statYardage": 11,
+            "yardsAfterCatch": 3,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884155",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass deep middle to S.Diggs to SEA 7 for 26 yards (C.Bryant).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:58"
+            },
+            "scoringPlay": false,
+            "statYardage": 26,
+            "yardsAfterCatch": 1,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884168",
+            "type": {
+              "id": "21",
+              "text": "Timeout",
+              "abbreviation": "TO"
+            },
+            "text": "Timeout #2 by SEA at 02:32.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:32"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884180",
+            "type": {
+              "id": "3",
+              "text": "Pass Incompletion"
+            },
+            "text": "(Shotgun) D.Maye pass incomplete short left to M.Hollins.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:32"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884210",
+            "type": {
+              "id": "67",
+              "text": "Passing Touchdown",
+              "abbreviation": "TD"
+            },
+            "text": "(Shotgun) D.Maye pass short left to R.Stevenson for 7 yards, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. D.Maye pass to H.Henry is incomplete. ATTEMPT FAILS. SEA-C.Bryant was injured during the play.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:21"
+            },
+            "scoringPlay": true,
+            "statYardage": 7,
+            "scoringType": {
+              "name": "touchdown",
+              "displayName": "Touchdown",
+              "abbreviation": "TD"
+            },
+            "pointAfterAttempt": {
+              "id": 15,
+              "text": "Two Point Pass",
+              "abbreviation": "Two Point Pass",
+              "value": 0
+            },
+            "yardsAfterCatch": 3,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884238",
+            "type": {
+              "id": "21",
+              "text": "Timeout",
+              "abbreviation": "TO"
+            },
+            "text": "Timeout #3 by SEA at 02:21.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:21"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          }
+        ]
+      },
+      {
+        "id": "40177298827",
+        "description": "3 plays, -12 yards, 0:32",
+        "team": {
+          "id": "26",
+          "name": "Seahawks",
+          "abbreviation": "SEA",
+          "displayName": "Seattle Seahawks",
+          "shortDisplayName": "Seahawks"
+        },
+        "start": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "2:21"
+          },
+          "yardLine": 46,
+          "text": "NE 46"
+        },
+        "end": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "1:49"
+          },
+          "yardLine": 58,
+          "text": "SEA 42"
+        },
+        "timeElapsed": {
+          "displayValue": "0:32"
+        },
+        "yards": -12,
+        "isScore": false,
+        "offensivePlays": 3,
+        "result": "PUNT",
+        "shortDisplayResult": "PUNT",
+        "displayResult": "Punt",
+        "plays": [
+          {
+            "id": "4017729884244",
+            "type": {
+              "id": "53",
+              "text": "Kickoff",
+              "abbreviation": "K"
+            },
+            "text": "A.Borregales kicks onside 11 yards from NE 35 to NE 46. G.Holani (didn't try to advance) to NE 46 for no gain.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:21"
+            },
+            "scoringPlay": false,
+            "statYardage": 11,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884280",
+            "type": {
+              "id": "5",
+              "text": "Rush",
+              "abbreviation": "RUSH"
+            },
+            "text": "K.Walker right end to NE 43 for 3 yards (A.Jennings).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:20"
+            },
+            "scoringPlay": false,
+            "statYardage": 3,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884291",
+            "type": {
+              "id": "21",
+              "text": "Timeout",
+              "abbreviation": "TO"
+            },
+            "text": "Timeout #2 by NE at 02:14.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:14"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884302",
+            "type": {
+              "id": "5",
+              "text": "Rush",
+              "abbreviation": "RUSH"
+            },
+            "text": "O.Oluwatimi and J.Jones reported in as eligible.  S.Darnold right tackle to NE 49 for -6 yards (M.Williams).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:14"
+            },
+            "scoringPlay": false,
+            "statYardage": -6,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884319",
+            "type": {
+              "id": "21",
+              "text": "Timeout",
+              "abbreviation": "TO"
+            },
+            "text": "Timeout #3 by NE at 02:10.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:10"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884335",
+            "type": {
+              "id": "8",
+              "text": "Penalty",
+              "abbreviation": "PEN"
+            },
+            "text": "O.Oluwatimi and J.Jones reported in as eligible.  K.Walker up the middle for 49 yards, TOUCHDOWN NULLIFIED by Penalty.PENALTY on SEA-J.Sundell, Offensive Holding, 10 yards, enforced at NE 49 - No Play.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:10"
+            },
+            "scoringPlay": false,
+            "statYardage": -10,
+            "penalty": {
+              "yards": 10,
+              "type": {
+                "slug": "offensive-holding",
+                "text": "Offensive Holding"
+              },
+              "status": {
+                "slug": "accepted",
+                "text": "Accepted"
+              }
+            },
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884376",
+            "type": {
+              "id": "5",
+              "text": "Rush",
+              "abbreviation": "RUSH"
+            },
+            "text": "O.Oluwatimi and J.Jones reported in as eligible.  K.Walker right guard to SEA 42 for 1 yard (A.Jennings; K.Tonga).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "2:01"
+            },
+            "scoringPlay": false,
+            "statYardage": 1,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884390",
+            "type": {
+              "id": "75",
+              "text": "Two-minute warning",
+              "abbreviation": "2Min Warn"
+            },
+            "text": "Two-Minute Warning",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "1:57"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884403",
+            "type": {
+              "id": "52",
+              "text": "Punt",
+              "abbreviation": "PUNT"
+            },
+            "text": "M.Dickson punts 52 yards to NE 6, Center-C.Stoll, out of bounds.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "1:57"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          }
+        ]
+      },
+      {
+        "id": "40177298828",
+        "description": "6 plays, 65 yards, 1:49",
+        "team": {
+          "id": "17",
+          "name": "Patriots",
+          "abbreviation": "NE",
+          "displayName": "New England Patriots",
+          "shortDisplayName": "Patriots"
+        },
+        "start": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "1:49"
+          },
+          "yardLine": 6,
+          "text": "NE 6"
+        },
+        "end": {
+          "period": {
+            "type": "quarter",
+            "number": 4
+          },
+          "yardLine": 47,
+          "text": "NE 47"
+        },
+        "timeElapsed": {
+          "displayValue": "1:49"
+        },
+        "yards": 65,
+        "isScore": false,
+        "offensivePlays": 6,
+        "result": "END OF GAME",
+        "shortDisplayResult": "END OF GAME",
+        "displayResult": "End of Game",
+        "plays": [
+          {
+            "id": "4017729884434",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(Shotgun) D.Maye pass short middle to S.Diggs to NE 12 for 6 yards (E.Jones). ** Injury Update: SEA-C.Bryant has returned to the game.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "1:49"
+            },
+            "scoringPlay": false,
+            "statYardage": 6,
+            "yardsAfterCatch": 3,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884459",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short left to A.Hooper to NE 17 for 5 yards (N.Emmanwori).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "1:30"
+            },
+            "scoringPlay": false,
+            "statYardage": 5,
+            "yardsAfterCatch": 1,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884484",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short left to M.Hollins to NE 28 for 11 yards (T.Woolen).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "1:12"
+            },
+            "scoringPlay": false,
+            "statYardage": 11,
+            "yardsAfterCatch": 11,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884512",
+            "type": {
+              "id": "8",
+              "text": "Penalty",
+              "abbreviation": "PEN"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye sacked at NE 27 for -1 yards (L.Williams).PENALTY on SEA-U.Nwosu, Defensive Offside, 5 yards, enforced at NE 28 - No Play.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:53"
+            },
+            "scoringPlay": false,
+            "statYardage": 5,
+            "penalty": {
+              "yards": 5,
+              "type": {
+                "slug": "defensive-offside",
+                "text": "Defensive Offside"
+              },
+              "status": {
+                "slug": "accepted",
+                "text": "Accepted"
+              }
+            },
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884544",
+            "type": {
+              "id": "8",
+              "text": "Penalty",
+              "abbreviation": "PEN"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass incomplete deep right [B.Mafe].PENALTY on SEA-T.Woolen, Illegal Use of Hands, 5 yards, enforced at NE 33 - No Play.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:47"
+            },
+            "scoringPlay": false,
+            "statYardage": 5,
+            "penalty": {
+              "yards": 5,
+              "type": {
+                "slug": "illegal-use-of-hands",
+                "text": "Illegal Use of Hands"
+              },
+              "status": {
+                "slug": "accepted",
+                "text": "Accepted"
+              }
+            },
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884578",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short middle to D.Douglas to NE 47 for 9 yards (E.Jones).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:39"
+            },
+            "scoringPlay": false,
+            "statYardage": 9,
+            "yardsAfterCatch": 2,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884603",
+            "type": {
+              "id": "3",
+              "text": "Pass Incompletion"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass incomplete deep right to K.Boutte.",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:20"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884626",
+            "type": {
+              "id": "24",
+              "text": "Pass Reception",
+              "abbreviation": "REC"
+            },
+            "text": "(No Huddle, Shotgun) D.Maye pass short right to T.Henderson to SEA 29 for 24 yards (J.Love).",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:12"
+            },
+            "scoringPlay": false,
+            "statYardage": 24,
+            "yardsAfterCatch": 29,
+            "isTurnover": false
+          },
+          {
+            "id": "4017729884651",
+            "type": {
+              "id": "66",
+              "text": "End of Game",
+              "abbreviation": "EG"
+            },
+            "text": "END GAME",
+            "period": {
+              "number": 4
+            },
+            "clock": {
+              "displayValue": "0:00"
+            },
+            "scoringPlay": false,
+            "statYardage": 0,
+            "isTurnover": false
+          }
+        ]
+      },
+      {
+        "id": "401772988|fixture-participant-corpus",
+        "team": {
+          "id": "26"
+        },
+        "plays": [
+          {
+            "id": "401test001x1",
+            "type": {
+              "text": "Rush",
+              "id": "5"
+            },
+            "text": "(14:22) 4 Yd Rush",
+            "statYardage": 4,
+            "participants": [
+              {
+                "athlete": {
+                  "displayName": "Devin Singletary",
+                  "jersey": "26"
+                },
+                "type": "rusher"
+              }
+            ]
+          },
+          {
+            "id": "401test001x2",
+            "type": {
+              "text": "Pass Reception",
+              "id": "24"
+            },
+            "text": "Pass complete to wide receiver for 12 yards",
+            "statYardage": 12,
+            "participants": [
+              {
+                "athlete": {
+                  "displayName": "Daniel Jones",
+                  "jersey": "8"
+                },
+                "type": "passer"
+              },
+              {
+                "athlete": {
+                  "displayName": "Darius Slayton",
+                  "jersey": "18"
+                },
+                "type": "receiver"
+              }
+            ]
+          },
+          {
+            "id": "401test001x3",
+            "type": {
+              "text": "Punt",
+              "id": "52"
+            },
+            "text": "Punt for 45 yards",
+            "statYardage": 45
+          },
+          {
+            "id": "401772988fx-pen",
+            "type": {
+              "text": "Penalty",
+              "id": "90"
+            },
+            "text": "PENALTY on NYG-76, False Start, 5 yards",
+            "statYardage": -5,
+            "participants": [
+              {
+                "athlete": {
+                  "displayName": "A.Player"
+                },
+                "type": "penalized"
+              }
+            ]
+          },
+          {
+            "id": "401772988fx-sack",
+            "type": {
+              "text": "Sack",
+              "id": "7"
+            },
+            "text": "Sack for -8 yards",
+            "statYardage": -8,
+            "participants": [
+              {
+                "athlete": {
+                  "displayName": "Q.B. Passer"
+                },
+                "type": "passer"
+              },
+              {
+                "athlete": {
+                  "displayName": "D.Lineman"
+                },
+                "type": "sackedBy"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "current": {
+      "team": {
+        "id": "17"
+      },
+      "plays": [
+        {
+          "id": "4017729884626",
+          "type": {
+            "id": "24",
+            "text": "Pass Reception",
+            "abbreviation": "REC"
+          },
+          "text": "(No Huddle, Shotgun) D.Maye pass short right to T.Henderson to SEA 29 for 24 yards (J.Love).",
+          "period": {
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "0:12"
+          },
+          "scoringPlay": false,
+          "statYardage": 24,
+          "yardsAfterCatch": 29,
+          "isTurnover": false
+        },
+        {
+          "id": "4017729884651",
+          "type": {
+            "id": "66",
+            "text": "End of Game",
+            "abbreviation": "EG"
+          },
+          "text": "END GAME",
+          "period": {
+            "number": 4
+          },
+          "clock": {
+            "displayValue": "0:00"
+          },
+          "scoringPlay": false,
+          "statYardage": 0,
+          "isTurnover": false
+        }
+      ]
+    }
+  }
+}
