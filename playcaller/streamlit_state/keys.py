@@ -20,6 +20,12 @@ SESSION_SETUP_IS_SIMULATED = "session_setup_is_simulated"
 # --- Main console (view-only toggles; not mirrored to ``game_*``) ---
 UI_PREVIOUS_DRIVES_FILTER = "ui_previous_drives_filter"
 
+# Drive audit lens (archived drives + audit table share these widgets).
+UI_DRIVE_AUDIT_SHOW_ALL = "ui_drive_audit_show_all"
+UI_DRIVE_AUDIT_LENS_CHIP = "ui_drive_audit_severity_chip"
+# Chronological drive # (1-based) to expand/highlight in archive; ``0`` = none.
+UI_DRIVE_AUDIT_FOCUS_CHRON = "ui_drive_audit_focus_chron"
+
 # --- Pending buffers (apply before widgets render; see ``streamlit_state.pending``) ---
 PENDING_LOG_SITUATION = "pending_log_situation"
 PENDING_END_DRIVE_UI = "pending_end_drive_ui"
@@ -63,6 +69,8 @@ LIVE_FEED_TEAM_SCOPE = "live_feed_team_scope"
 LIVE_FEED_LAST_AUDIT = "live_feed_last_audit"
 LIVE_FEED_LAST_ERROR = "live_feed_last_error"
 LIVE_FEED_LAST_SYNC_EPOCH = "live_feed_last_sync_epoch"
+# Last ESPN clock from displayClock / numeric status only (for brief displayClock drop recovery).
+LIVE_FEED_TRUSTED_CLOCK = "live_feed_trusted_clock"
 LIVE_FEED_LAST_ORIGIN = "live_feed_last_origin"
 # Set True when ESPN HTTP used verify=False (env force or automatic local fallback).
 LIVE_FEED_HTTP_INSECURE_WARNING = "live_feed_http_insecure_warning"
@@ -88,6 +96,10 @@ HV_REPO_SELECTED_GAME_IDS = "hv_repo_selected_game_ids"
 UI_HISTORICAL_NUDGE_ENABLED = "ui_historical_nudge_enabled"
 # Read-only warehouse context on Generate (FootballWarehouseClient); does not change scores.
 UI_WAREHOUSE_ADVISORY_ENABLED = "ui_warehouse_advisory_enabled"
+# Processed-JSON historical signal from ``warehouse.recommender`` (``WAREHOUSE_RECOMMENDER_ENABLED``).
+WAREHOUSE_HISTORICAL_SIGNAL = "warehouse_historical_signal_v1"
+# Last Generate: advisory payload summary for operator feedback (dict or None).
+UI_WAREHOUSE_LAST_GENERATE_STATUS = "ui_warehouse_last_generate_status"
 
 # Retroactive archived-drive replay: map cache key → list of ``ActualVsReplayComparisonRow``.
 # FIFO-capped in ``cached_comparison_rows_for_archived_drive`` (long Streamlit sessions).

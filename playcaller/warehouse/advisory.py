@@ -9,9 +9,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, Optional
 
-from football_history_warehouse.consumer.client import FootballWarehouseClient
-from football_history_warehouse.query.pagination import PageParams
-from football_history_warehouse.query.situation.filter import PlaySituationFilter, validate_situation_has_scope
+from football_history_warehouse.consumer import (
+    FootballWarehouseClient,
+    PageParams,
+    PlaySituationFilter,
+    validate_situation_has_scope,
+)
 
 from playcaller.domain import GameContext
 from playcaller.game import Game
@@ -150,12 +153,6 @@ def build_warehouse_advisory_payload(
             base["outcome_game"] = _outcome_summary_dict(client, game_filt)
         except Exception as exc:
             base["errors"].append(f"outcome_game: {exc}")
-
-    if base["outcome_league_season"] is None and base["outcome_game"] is None:
-        try:
-            base["outcome_league_season"] = _outcome_summary_dict(client, scoped)
-        except Exception as exc:
-            base["errors"].append(f"outcome_scoped: {exc}")
 
     # --- Team tendency (offense on field) ---
     off_id = offense_team_id_on_field(possession=possession, binding=binding)

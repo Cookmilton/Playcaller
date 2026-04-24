@@ -1,0 +1,35 @@
+{
+  "header": {
+    "competitions": [
+      {
+        "id": "401test003",
+        "competitors": [
+          {
+            "id": "10",
+            "homeAway": "home",
+            "score": "0",
+            "team": {"id": "10", "abbreviation": "A"}
+          },
+          {
+            "id": "14",
+            "homeAway": "away",
+            "score": "0",
+            "team": {"id": "14", "abbreviation": "B"}
+          }
+        ],
+        "status": {
+          "type": {
+            "completed": false,
+            "shortDetail": "End of the 2nd Quarter"
+          },
+          "displayClock": "0:00"
+        },
+        "situation": null
+      }
+    ]
+  },
+  "drives": {
+    "previous": [],
+    "current": {"plays": []}
+  }
+}

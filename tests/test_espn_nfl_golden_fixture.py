@@ -46,6 +46,19 @@ def test_completed_drives_team_mapping_matches_competition() -> None:
         assert fd.team_display_name == labels[fd.team_espn_id][1]
 
 
+def test_completed_drives_attach_feed_audit_metadata() -> None:
+    payload = _load()
+    drives = extract_completed_drives_from_espn_payload(payload, event_id="401772988")
+    assert drives[0].feed_audit is not None
+    a = drives[0].feed_audit
+    assert a.espn_result_code == "TD"
+    assert a.start_period == 4
+    assert a.start_clock_display == "4:27"
+    assert "NE 35" in (a.start_field_text or "")
+    assert a.first_play_clock_display == "4:27"
+    assert a.end_clock_display == "2:21"
+
+
 def test_real_trimmed_play_without_participants_yields_empty_people() -> None:
     payload = _load()
     play_id = "4017729884626"

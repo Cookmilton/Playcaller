@@ -22,14 +22,6 @@ from playcaller.session_game_metadata import (
 from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_LAST_SYNC_EPOCH,
-    SESSION_SETUP_GAME_DATE,
-    SESSION_SETUP_GAME_LABEL,
-    SESSION_SETUP_IS_SIMULATED,
-    SESSION_SETUP_NOTES,
-    SESSION_SETUP_OPPONENT,
-    SESSION_SETUP_ROSTER_VERSION,
-    SESSION_SETUP_SEASON,
-    SESSION_SETUP_TEAM_NAME,
     UNDO_BUNDLE,
 )
 from playcaller.ui.helpers import (
@@ -88,22 +80,8 @@ def render_main_content(
 
     with st.expander(EXPANDER_SESSION_RECORD, expanded=False):
         st.caption(
-            "Set **once per game**. Stored on **game JSON** and copied into each **snap review** row."
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            st.text_input("Our team name", key=SESSION_SETUP_TEAM_NAME, placeholder="e.g. East High")
-            st.text_input("Opponent", key=SESSION_SETUP_OPPONENT, placeholder="Optional")
-            st.text_input("Game date", key=SESSION_SETUP_GAME_DATE, placeholder="YYYY-MM-DD")
-            st.text_input("Game label / title", key=SESSION_SETUP_GAME_LABEL, placeholder="Optional short title")
-        with c2:
-            st.text_input("Season", key=SESSION_SETUP_SEASON, placeholder="e.g. 2026")
-            st.text_input("Roster / roster version", key=SESSION_SETUP_ROSTER_VERSION, placeholder="Optional")
-            st.text_area("Notes", key=SESSION_SETUP_NOTES, height=68, placeholder="Optional situational notes")
-        st.checkbox(
-            "This session is simulated (not an actual game)",
-            key=SESSION_SETUP_IS_SIMULATED,
-            help="Unchecked = **real / actual** sideline data. Checked = practice, what-if, or lab session.",
+            "Session identity fields moved to the sidebar **🎮 Game Setup** zone. "
+            "Values still store on **game JSON** and copy into each **snap review** row."
         )
         sid = ""
         if isinstance(game.session_metadata, dict):

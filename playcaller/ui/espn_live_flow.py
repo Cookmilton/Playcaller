@@ -6,6 +6,7 @@ Keeps ``sidebar.py`` thin; no ESPN network/provider calls here.
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, MutableMapping, Optional
@@ -209,6 +210,38 @@ def format_espn_game_summary_markdown(
         f"- **Event ID:** `{event_id}`\n"
         f"- **Our team (OC):** {our_team_description}\n"
         f"- **Sync:** {ready}{tail}"
+    )
+
+
+def format_espn_match_pills_html(
+    *,
+    away_name: str,
+    home_name: str,
+    event_id: str,
+    our_team_description: str,
+    sync_ready: bool,
+    sync_block_reason: str | None,
+) -> str:
+    """Compact pill row for sidebar (inline HTML, escape names)."""
+    away = html.escape(away_name.strip() or "Away")
+    home = html.escape(home_name.strip() or "Home")
+    eid = html.escape(str(event_id).strip() or "—")
+    oc = html.escape(str(our_team_description).strip() or "—")
+    status = "Ready" if sync_ready else "Blocked"
+    reason = "" if sync_ready else html.escape(str(sync_block_reason or "See detail"))
+    pill = (
+        "display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid #475569;"
+        "margin:2px 6px 2px 0;font-size:12px;color:#e2e8f0;background:#1e293b"
+    )
+    return (
+        f"<div style='font-size:12px;line-height:1.5;color:#cbd5e1;margin:4px 0 8px 0'>"
+        f"<span style='{pill}'><strong>{away}</strong></span>"
+        f"<span style='{pill}'><strong>{home}</strong></span>"
+        f"<span style='{pill}'>ID {eid}</span>"
+        f"<span style='{pill}'>{oc}</span>"
+        f"<span style='{pill}'>{html.escape(status)}"
+        f"{'' if sync_ready else f' · {reason}'}</span>"
+        f"</div>"
     )
 
 

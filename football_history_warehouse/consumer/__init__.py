@@ -14,7 +14,8 @@ Optional: the same four operations are exposed as JSON at :mod:`football_history
 - :class:`FootballWarehouseClient`
 - :class:`~football_history_warehouse.consumer.dtos.PlaysBySituationPage`,
   :class:`~football_history_warehouse.consumer.dtos.TeamTendencySummary`,
-  :class:`~football_history_warehouse.consumer.dtos.SituationOutcomeSummary`
+  :class:`~football_history_warehouse.consumer.dtos.SituationOutcomeSummary`,
+  :class:`~football_history_warehouse.consumer.dtos.GameInventoryPage` / :class:`~football_history_warehouse.consumer.dtos.WarehouseGameInventoryItem`
 - :class:`~football_history_warehouse.review.schema.GameReviewPackage` (full review payload)
 - :class:`~football_history_warehouse.query.situation.filter.PlaySituationFilter` and bucket enums
 - :class:`~football_history_warehouse.query.pagination.PageParams`
@@ -32,10 +33,13 @@ from __future__ import annotations
 
 from football_history_warehouse.consumer.client import FootballWarehouseClient, try_client_from_env
 from football_history_warehouse.consumer.dtos import (
+    GameInventoryPage,
     PlaysBySituationPage,
     SituationOutcomeSummary,
     TeamTendencySummary,
+    WarehouseGameInventoryItem,
 )
+from football_history_warehouse.consumer.inventory_filters import GameInventoryFilters
 from football_history_warehouse.domain.competition import Game, Play
 from football_history_warehouse.query.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, PageParams, PagedItems
 from football_history_warehouse.query.situation import (
@@ -55,6 +59,8 @@ __all__ = [
     "FieldPositionBucket",
     "FootballWarehouseClient",
     "Game",
+    "GameInventoryFilters",
+    "GameInventoryPage",
     "GameReviewPackage",
     "MAX_PAGE_LIMIT",
     "PageParams",
@@ -65,6 +71,7 @@ __all__ = [
     "ScoreDifferentialBucket",
     "SituationOutcomeSummary",
     "TeamTendencySummary",
+    "WarehouseGameInventoryItem",
     "try_client_from_env",
     "validate_situation_has_scope",
 ]

@@ -8,12 +8,78 @@ for drive summaries and :func:`~playcaller.game.classify_drive_end`.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Any, Dict, Optional, Tuple
 
 from playcaller.domain import ActualPlayResult, PASS_FAMILIES, RUN_FAMILIES
+from playcaller.situation import territory_yardline_from_abs_yards
 
 from .espn_play_participants import enrich_espn_actual_with_participants
 from .espn_play_text_players import play_text_from_espn_row
+
+# Canonical field position after parse: ``feed_presnap_territory`` ∈ {own, opponents},
+# ``feed_presnap_yardline`` ∈ 1–50 (see ``situation.py``). ESPN ``start.yardLine`` /
+# ``yardsToEndzone`` are treated as **yards to opponent goal** on scrimmage snaps
+# (validated against Packers–Lions summary): abs_yards_from_own_goal = 100 − ytez.
+
+_DOWN_DIST_HEAD = re.compile(
+    r"^(?P<ord>1st|2nd|3rd|4th)\s*&\s*(?P<rest>.+)$",
+    re.IGNORECASE,
+)
+
+
+def _espn_yards_to_endzone_from_start(st: dict) -> Optional[int]:
+    """Prefer ``yardsToEndzone``; fall back to ``yardLine`` when only one scalar is available."""
+    yt = st.get("yardsToEndzone")
+    if yt is not None:
+        try:
+            return int(yt)
+        except (TypeError, ValueError):
+            pass
+    yl = st.get("yardLine")
+    if yl is not None:
+        try:
+            return int(yl)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def parse_espn_down_distance_from_text(short_text: str, long_text: str) -> Tuple[Optional[int], Optional[int], bool]:
+    """
+    Parse ``start.shortDownDistanceText`` / ``start.downDistanceText``.
+
+    Returns ``(down, distance, goal_line_flag)``. ``distance`` is ``None`` when text is ``& Goal``
+    without a trailing number (structured distance may still be filled separately).
+    """
+    for raw in (short_text or "", long_text or ""):
+        s = str(raw or "").strip()
+        if not s:
+            continue
+        head = s.split(" at ")[0].strip()
+        m = _DOWN_DIST_HEAD.match(head)
+        if not m:
+            continue
+        ord_s = m.group("ord").lower()
+        down_map = {"1st": 1, "2nd": 2, "3rd": 3, "4th": 4}
+        down = down_map.get(ord_s)
+        if down is None:
+            continue
+        rest = str(m.group("rest") or "").strip()
+        rlow = rest.lower()
+        if rlow.startswith("goal") or rlow == "g":
+            return down, None, True
+        num_m = re.match(r"^(\d+)", rest)
+        if num_m:
+            try:
+                dist = int(num_m.group(1))
+                if 1 <= dist <= 99:
+                    return down, dist, False
+            except ValueError:
+                pass
+        return down, None, False
+    return None, None, False
+
 
 _ADMIN_SUBSTRINGS = (
     "end of quarter",
@@ -170,6 +236,41 @@ def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult
             turnover=recovered_opp,
             turnover_kind=tk,
             description=f"[ESPN] Fumble · {_short_yards(yds)}",
+        )
+
+    # --- Kickoff (must precede generic rush/pass; not a scrimmage down) ---
+    if (
+        "kickoff" in text_l
+        or ptype == "kickoff"
+        or "kick off" in text_l
+        or bool(re.search(r"\bkick[-\s]?off\b", text_l))
+        or ("onside kick" in text_l)
+    ):
+        return ActualPlayResult(
+            concept_name="Kickoff",
+            family="special_teams",
+            play_type="special",
+            result_type="kickoff",
+            yards_gained=yds,
+            description=f"[ESPN] Kickoff · {_short_yards(yds)}",
+        )
+
+    # --- Extra point / PAT (before field goal — wording differs from FG attempts) ---
+    if (
+        "extra point" in text_l
+        or "point after touchdown" in text_l
+        or "point after" in text_l
+        or ptype in ("extra point", "pat", "pointafterattempt", "point after touchdown")
+    ):
+        missed = any(x in text_l for x in ("no good", "missed", "blocked", "wide", "short"))
+        rt = "extra_point_miss" if missed else "extra_point"
+        return ActualPlayResult(
+            concept_name="Extra point",
+            family="special_teams",
+            play_type="special",
+            result_type=rt,
+            yards_gained=yds,
+            description=f"[ESPN] Extra point {'missed' if missed else 'good'} · {_short_yards(yds)}",
         )
 
     # --- Kicks / punts ---
@@ -335,6 +436,98 @@ def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult
     )
 
 
+def apply_espn_feed_presnap_fields(ap: ActualPlayResult, play: Dict[str, Any]) -> ActualPlayResult:
+    """
+    Copy per-play game state from ESPN JSON (period, clock, start, scores) onto ``ActualPlayResult``.
+
+    Uses only ``.get`` — never raises on alternate payload shapes. Omitted fields stay ``None``.
+    """
+    if not isinstance(play, dict):
+        return ap
+    kw: Dict[str, Any] = {}
+    per = play.get("period")
+    if isinstance(per, dict):
+        n = per.get("number")
+        if n is not None:
+            try:
+                qi = int(n)
+                if qi > 0:
+                    kw["feed_period_number"] = qi
+            except (TypeError, ValueError):
+                pass
+    clk = play.get("clock")
+    if isinstance(clk, dict):
+        dv = clk.get("displayValue")
+        if dv is not None:
+            s = str(dv).strip()
+            if s:
+                kw["feed_clock_display"] = s
+    st = play.get("start")
+    if isinstance(st, dict):
+        try:
+            yl_raw = st.get("yardLine")
+            if yl_raw is not None:
+                kw["feed_start_yard_line"] = int(yl_raw)
+        except (TypeError, ValueError):
+            pass
+        ytez = _espn_yards_to_endzone_from_start(st)
+        if ytez is not None:
+            try:
+                yi = int(ytez)
+                if 1 <= yi <= 99:
+                    kw["feed_yards_to_endzone"] = yi
+                    abs_y = 100 - yi
+                    terr, yline = territory_yardline_from_abs_yards(abs_y)
+                    kw["feed_presnap_territory"] = terr
+                    kw["feed_presnap_yardline"] = int(yline)
+            except (TypeError, ValueError):
+                pass
+        try:
+            d0 = st.get("down")
+            if d0 is not None:
+                di = int(d0)
+                if di in (1, 2, 3, 4):
+                    kw["feed_presnap_down"] = di
+        except (TypeError, ValueError):
+            pass
+        try:
+            dst = st.get("distance")
+            if dst is not None:
+                ddi = int(dst)
+                if 1 <= ddi <= 99:
+                    kw["feed_presnap_distance"] = ddi
+        except (TypeError, ValueError):
+            pass
+        ddt = str(st.get("downDistanceText") or "").strip()
+        sdt = str(st.get("shortDownDistanceText") or "").strip()
+        if sdt or ddt:
+            td, tdist, goal = parse_espn_down_distance_from_text(sdt, ddt)
+            if goal:
+                kw["feed_presnap_goal_down"] = True
+            if td is not None and kw.get("feed_presnap_down") is None:
+                kw["feed_presnap_down"] = td
+            if tdist is not None and kw.get("feed_presnap_distance") is None:
+                kw["feed_presnap_distance"] = tdist
+        team = st.get("team")
+        if isinstance(team, dict):
+            tid = str(team.get("id") or "").strip()
+            if tid:
+                kw["feed_possession_team_id"] = tid
+            tab = str(team.get("abbreviation") or "").strip()
+            if tab:
+                kw["feed_possession_team_abbr"] = tab
+    for json_key, attr in (("homeScore", "feed_home_score"), ("awayScore", "feed_away_score")):
+        v = play.get(json_key)
+        if v is not None:
+            try:
+                kw[attr] = int(v)
+            except (TypeError, ValueError):
+                pass
+    if not kw:
+        return ap
+    return replace(ap, **kw)
+
+
 def espn_play_to_actual(play: Dict[str, Any]) -> Optional[ActualPlayResult]:
     """
     Convert one ESPN ``drives.*.plays[]`` element into an ``ActualPlayResult``.
@@ -348,12 +541,25 @@ def espn_play_to_actual(play: Dict[str, Any]) -> Optional[ActualPlayResult]:
     ap = _espn_play_to_actual_core(play)
     if ap is None:
         return None
-    return enrich_espn_actual_with_participants(ap, play)
+    ap = apply_espn_feed_presnap_fields(ap, play)
+    ap = enrich_espn_actual_with_participants(ap, play)
+    return apply_espn_feed_presnap_fields(ap, play)
 
 
 def validate_actual_for_engine(a: ActualPlayResult) -> ActualPlayResult:
     """Ensure ``family`` is in a bucket the predictor recognizes when possible."""
     from dataclasses import replace
+
+    rt = str(a.result_type or "").strip().lower()
+    if rt in (
+        "kickoff",
+        "punt",
+        "field_goal",
+        "field_goal_miss",
+        "extra_point",
+        "extra_point_miss",
+    ) or str(a.family or "").strip().lower() == "special_teams":
+        return replace(a, family="special_teams")
 
     if a.family in RUN_FAMILIES or a.family in PASS_FAMILIES:
         return a

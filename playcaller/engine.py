@@ -14,7 +14,7 @@ from .model_types import ModelOutput
 from .predicted_outcome import enrich_recommendation_dict
 from .predictors.base import Predictor
 from .state import DriveLogger
-from football_history_warehouse.consumer.client import FootballWarehouseClient
+from football_history_warehouse.consumer import FootballWarehouseClient
 
 from .warehouse.advisory import attach_warehouse_advisory_to_result
 from .warehouse.binding import WarehouseBinding

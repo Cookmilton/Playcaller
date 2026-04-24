@@ -1,7 +1,8 @@
 """
 Read-only **warehouse advisory** context for Generate (not blended into ranking).
 
-Uses :mod:`football_history_warehouse.consumer` only — no ORM or ingest imports here.
+Warehouse access is via :mod:`football_history_warehouse.consumer` (client + re-exported query types).
+No ORM, repositories, or ingest imports.
 """
 
 from __future__ import annotations

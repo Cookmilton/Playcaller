@@ -1,6 +1,14 @@
 """Ingest-layer errors (explicit; never use bare ``Exception`` for operator flow)."""
 
 
+class IngestValidationError(ValueError):
+    """Normalized ingest input failed validation (missing required fields, bad shape)."""
+
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(f"{field}: {message}")
+        self.field = field
+
+
 class RawIngestError(RuntimeError):
     """
     Raw registration or persistence failed after validation.

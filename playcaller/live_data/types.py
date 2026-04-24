@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
+ClockResolutionSource = Literal["display_clock", "numeric_status", "play_text"]
+
 from playcaller.domain import ActualPlayResult
+from playcaller.game import DriveFeedAuditSnapshot
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,7 @@ class FeedCompletedDrive:
     plays: Tuple[ActualPlayResult, ...]
     team_abbreviation: str = ""
     team_display_name: str = ""
+    feed_audit: Optional[DriveFeedAuditSnapshot] = None
 
 
 @dataclass
@@ -50,6 +54,8 @@ class NormalizedGameSnapshot:
     is_final: bool
     new_plays: Tuple[FeedPlayEvent, ...] = ()
     debug_notes: Tuple[str, ...] = ()
+    # Which ESPN branch supplied ``clock_seconds_in_period`` (``None`` if clock unresolved).
+    clock_resolution: Optional[ClockResolutionSource] = None
     coached_team_id: Optional[str] = None
     completed_feed_drives: Tuple[FeedCompletedDrive, ...] = ()
     # Raw ``drives.current.plays`` JSON rows (full list) for in-progress merge into ``DriveLogger``.
@@ -65,6 +71,8 @@ class FetchResult:
     error: Optional[str] = None
     raw_excerpt: Optional[str] = None
     used_insecure_ssl_fallback: bool = False
+    # Top-level ESPN summary JSON (same dict as fetch_json returns).
+    raw_summary: Optional[Dict[str, Any]] = None
 
 
 @dataclass

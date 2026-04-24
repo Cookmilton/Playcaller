@@ -7,7 +7,7 @@ Normalized **review rows** for Post-game / Review Session — stored model vs re
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from enum import Enum
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
@@ -17,6 +17,7 @@ from playcaller.actual_result import (
 )
 from playcaller.domain import PASS_FAMILIES, RUN_FAMILIES, ActualPlayResult
 from playcaller.game import Game
+from playcaller.play_event_segment import PlayEventSegment, segment_from_actual
 from playcaller.live_data.drive_display import (
     PREVIOUS_DRIVES_FILTER_BOTH,
     classify_drive_team_side,
@@ -41,6 +42,7 @@ class ReviewMode(str, Enum):
     TRUE_STORED = "true_stored"  # Primary JSON key ``snap_review_log`` (gold standard)
     LEGACY_STORED = "legacy_stored"  # Rows from ``recommendation_audit`` only in file
     REPLAY_ONLY = "replay_only"  # No stored decisions — retroactive replay vs logged plays
+    WAREHOUSE_HISTORICAL = "warehouse_historical"  # nflverse processed JSON — actual-only rows (no model)
     NOT_REVIEWABLE = "not_reviewable"
 
 
@@ -80,6 +82,8 @@ class UnifiedReviewRow:
     replay_error: Optional[str] = None
     chain_error: Optional[str] = None
     drive_result_kind: Optional[str] = None
+    event_segment: PlayEventSegment = PlayEventSegment.OFFENSE
+    offensive_snap_index: Optional[int] = None
 
     def breakdown_dict(self) -> Dict[str, Any]:
         """Structured breakdown for UI (not a full raw row dump)."""
@@ -88,6 +92,8 @@ class UnifiedReviewRow:
             "review_mode": self.review_mode.value,
             "drive_id": self.drive_id,
             "play_index_on_drive": self.play_index_on_drive,
+            "event_segment": self.event_segment.value,
+            "offensive_snap_index": self.offensive_snap_index,
             "down": pre.get("down"),
             "distance": pre.get("distance"),
             "territory": pre.get("territory"),
@@ -155,6 +161,11 @@ def export_review_capability_bullets(
             "**This file supports replay review** — comparisons use the **current model** vs recorded plays (not historical Generate output).",
             "Re-run **Generate** during a session to produce a **`snap_review_log`** timeline for stored decisions.",
         )
+    if mode == ReviewMode.WAREHOUSE_HISTORICAL:
+        return (
+            "**Warehouse / nflverse processed game** — film-room rows are **actual-only** (no model recommendations in file).",
+            "Export a **Play Caller** session JSON to compare stored or replay model output to logged plays.",
+        )
     return ("No logged plays — nothing to review.",)
 
 
@@ -200,9 +211,15 @@ def _pre_from_replay_record(rec: PreSnapContextRecord) -> Dict[str, Any]:
         "yardline": rec.yardline,
         "quarter": rec.quarter,
         "seconds_remaining": rec.seconds_remaining,
+        "clock_display": rec.clock_display,
         "score_diff": rec.score_diff,
         "coverage_shell": rec.coverage_shell,
         "weather": rec.weather,
+        "home_score_snap": rec.home_score_snap,
+        "away_score_snap": rec.away_score_snap,
+        "possession_team_abbrev": rec.possession_team_abbrev,
+        "opponent_team_abbrev": rec.opponent_team_abbrev,
+        "snap_provenance": list(rec.snap_provenance) if rec.snap_provenance else [],
     }
 
 
@@ -211,6 +228,7 @@ def _comparison_for_stored(
     row: Mapping[str, Any],
     act: Optional[ActualPlayResult],
     act_dict: Optional[Mapping[str, Any]],
+    segment: PlayEventSegment,
 ) -> Tuple[UnifiedComparison, Dict[str, Any], Dict[str, Any]]:
     model_bucket = model_summary_bucket_from_audit_row(row)
     model_rp = _model_run_pass_from_family(row.get("selected_family"))
@@ -236,6 +254,19 @@ def _comparison_for_stored(
     actual_rp = actual_run_pass_bucket(act)
     afam = str(act.family or "")
     sfam = str(row.get("selected_family") or "")
+    actual_struct = {
+        "summary_bucket": actual_bucket,
+        "actual_bucket": actual_bucket,
+        "family": afam,
+        "run_pass": actual_rp,
+        "yards_gained": int(act.yards_gained),
+        "play_type": str(act.play_type or ""),
+        "result_type": str(act.result_type or ""),
+    }
+    if segment != PlayEventSegment.OFFENSE:
+        cmp = UnifiedComparison(run_pass_match=None, summary_bucket_match=None, family_match=None)
+        return cmp, actual_struct, model_struct
+
     fam_m: Optional[bool] = None
     if afam and sfam:
         fam_m = afam == sfam
@@ -248,14 +279,6 @@ def _comparison_for_stored(
         actual_run_pass=actual_rp,
         replay_run_pass=model_rp,
     )
-    actual_struct = {
-        "summary_bucket": actual_bucket,
-        "actual_bucket": actual_bucket,
-        "family": afam,
-        "run_pass": actual_rp,
-        "yards_gained": int(act.yards_gained),
-        "play_type": str(act.play_type or ""),
-    }
     cmp = UnifiedComparison(
         run_pass_match=rpm,
         summary_bucket_match=sbm,
@@ -320,7 +343,10 @@ def build_unified_rows_from_audit(
                 act = linked_actual_to_play(act_dict)
             except (TypeError, ValueError):
                 act = None
-        cmp_u, actual_struct, model_struct = _comparison_for_stored(row=row, act=act, act_dict=act_dict)
+        seg = segment_from_actual(act)
+        cmp_u, actual_struct, model_struct = _comparison_for_stored(
+            row=row, act=act, act_dict=act_dict, segment=seg
+        )
         conf = _confidence_from_audit(row)
 
         if act is not None:
@@ -348,12 +374,21 @@ def build_unified_rows_from_audit(
         if 0 <= de < len(game.drives):
             side = classify_drive_team_side(game.drives[de], our_coached_espn_id=our_coached_espn_id)
 
-        tags = _mismatch_heuristics(
-            pre=pre,
-            comparison=cmp_u,
-            model_rp=model_struct.get("run_pass"),
-            actual_rp=actual_struct.get("run_pass"),
+        tags = (
+            _mismatch_heuristics(
+                pre=pre,
+                comparison=cmp_u,
+                model_rp=model_struct.get("run_pass"),
+                actual_rp=actual_struct.get("run_pass"),
+            )
+            if seg == PlayEventSegment.OFFENSE
+            else ()
         )
+
+        tf_raw = row.get("top_families")
+        if isinstance(tf_raw, list) and tf_raw:
+            model_struct = dict(model_struct)
+            model_struct["top_families"] = [dict(x) for x in tf_raw if isinstance(x, dict)]
 
         rows.append(
             UnifiedReviewRow(
@@ -377,9 +412,22 @@ def build_unified_rows_from_audit(
                 replay_error=None,
                 chain_error=None,
                 drive_result_kind=dr_kind,
+                event_segment=seg,
             )
         )
-    return rows
+    return _annotate_offensive_snap_indices(rows)
+
+
+def _annotate_offensive_snap_indices(rows: List[UnifiedReviewRow]) -> List[UnifiedReviewRow]:
+    counts: Dict[int, int] = {}
+    out: List[UnifiedReviewRow] = []
+    for r in rows:
+        if r.event_segment == PlayEventSegment.OFFENSE:
+            counts[r.drive_id] = counts.get(r.drive_id, 0) + 1
+            out.append(replace(r, offensive_snap_index=counts[r.drive_id]))
+        else:
+            out.append(replace(r, offensive_snap_index=None))
+    return out
 
 
 def build_unified_rows_from_replay(
@@ -423,7 +471,7 @@ def build_unified_rows_from_replay(
 
         for r in comp_rows:
             rows.append(_unified_from_comparison_row(r, drive_id=chron_i, team_side=side, drive_result_kind=dr_kind))
-    return rows
+    return _annotate_offensive_snap_indices(rows)
 
 
 def _unified_from_comparison_row(
@@ -470,6 +518,10 @@ def _unified_from_comparison_row(
             "model_name": m.model_name,
             "model_version": m.model_version,
         }
+        if r.top_family_scores:
+            model_struct["top_families"] = [
+                {"family": fam, "score": float(score)} for fam, score in r.top_family_scores
+            ]
         conf = m.confidence
     else:
         model_head = r.model_replay_summary or "—"
@@ -483,18 +535,24 @@ def _unified_from_comparison_row(
         "family": str(r.actual_structured_result.get("family", "") or ""),
         "run_pass": r.actual_run_pass,
         "yards_gained": r.actual_structured_result.get("yards_gained"),
+        "result_type": str(r.actual_structured_result.get("result_type", "") or ""),
     }
-    cmp_u = UnifiedComparison(
-        run_pass_match=r.run_pass_match,
-        summary_bucket_match=r.coarse_bucket_match,
-        family_match=r.family_match,
-    )
-    tags = _mismatch_heuristics(
-        pre=pre,
-        comparison=cmp_u,
-        model_rp=r.model_run_pass,
-        actual_rp=r.actual_run_pass,
-    )
+    seg = segment_from_actual(act)
+    if seg != PlayEventSegment.OFFENSE:
+        cmp_u = UnifiedComparison(run_pass_match=None, summary_bucket_match=None, family_match=None)
+        tags: Tuple[str, ...] = ()
+    else:
+        cmp_u = UnifiedComparison(
+            run_pass_match=r.run_pass_match,
+            summary_bucket_match=r.coarse_bucket_match,
+            family_match=r.family_match,
+        )
+        tags = _mismatch_heuristics(
+            pre=pre,
+            comparison=cmp_u,
+            model_rp=r.model_run_pass,
+            actual_rp=r.actual_run_pass,
+        )
     return UnifiedReviewRow(
         review_mode=ReviewMode.REPLAY_ONLY,
         audit_index=None,
@@ -516,6 +574,7 @@ def _unified_from_comparison_row(
         replay_error=r.replay_error,
         chain_error=r.chain_error,
         drive_result_kind=drive_result_kind,
+        event_segment=seg,
     )
 
 
@@ -527,6 +586,8 @@ class ReviewRowFilter:
     mismatch_only: bool = False
     team_side: str = PREVIOUS_DRIVES_FILTER_BOTH  # our | opponent | both
     our_coached_espn_id: str = ""
+    # Empty = all segments. Values are :class:`PlayEventSegment` names e.g. ``"offense"``, ``"kickoff"``.
+    event_segments: Tuple[str, ...] = ()
 
     def active(self) -> bool:
         return bool(
@@ -535,6 +596,7 @@ class ReviewRowFilter:
             or self.match_only
             or self.mismatch_only
             or (self.team_side != PREVIOUS_DRIVES_FILTER_BOTH)
+            or bool(self.event_segments)
         )
 
 
@@ -555,6 +617,8 @@ def _row_all_true_matches(row: UnifiedReviewRow) -> bool:
 def filter_unified_rows(rows: Sequence[UnifiedReviewRow], flt: ReviewRowFilter) -> List[UnifiedReviewRow]:
     out: List[UnifiedReviewRow] = []
     for r in rows:
+        if flt.event_segments and r.event_segment.value not in flt.event_segments:
+            continue
         if flt.drive_result_kinds and (r.drive_result_kind or "") not in flt.drive_result_kinds:
             continue
         if flt.play_run_pass:
@@ -582,6 +646,8 @@ class ReviewSummaryMetrics:
     total_rows: int
     rows_with_actual: int
     drives_with_rows: int
+    offensive_rows: int
+    special_teams_rows: int
     run_pass_match_rate: Optional[float]
     bucket_match_rate: Optional[float]
     family_match_rate: Optional[float]
@@ -589,11 +655,48 @@ class ReviewSummaryMetrics:
     high_confidence_agreement_rate: Optional[float]
 
 
+def high_confidence_full_agreement_counts(
+    rows: Sequence[UnifiedReviewRow],
+    *,
+    confidence_floor: float = 0.60,
+) -> Tuple[int, int]:
+    """
+    Rows with confidence ≥ ``confidence_floor`` where run/pass and summary bucket are both scorable.
+
+    Returns ``(n_full_agree, n_scorable)`` — same denominator used for coaching “high-conf agree” stats.
+    """
+    agree = scorable = 0
+    for r in rows:
+        if r.event_segment != PlayEventSegment.OFFENSE:
+            continue
+        if r.confidence is None or float(r.confidence) < confidence_floor:
+            continue
+        rp = r.comparison.run_pass_match
+        bk = r.comparison.summary_bucket_match
+        if rp is None or bk is None:
+            continue
+        scorable += 1
+        if rp and bk:
+            agree += 1
+    return agree, scorable
+
+
+def _distance_bucket_for_insights(dist: int) -> str:
+    """Match :func:`playcaller.review.session_analytics._distance_bucket` labels for consistency."""
+    if dist <= 3:
+        return "Short (1–3)"
+    if dist <= 6:
+        return "Medium (4–6)"
+    return "Long (7+)"
+
+
 def compute_review_summary_metrics(rows: Sequence[UnifiedReviewRow]) -> ReviewSummaryMetrics:
     def _rate(getter: Any) -> Optional[float]:
         num = 0
         den = 0
         for r in rows:
+            if r.event_segment != PlayEventSegment.OFFENSE:
+                continue
             v = getter(r)
             if v is None:
                 continue
@@ -606,19 +709,11 @@ def compute_review_summary_metrics(rows: Sequence[UnifiedReviewRow]) -> ReviewSu
 
     with_actual = sum(1 for r in rows if r.actual_headline and "No logged play" not in r.actual_headline)
     drives_n = len({r.drive_id for r in rows})
+    off_n = sum(1 for r in rows if r.event_segment == PlayEventSegment.OFFENSE)
+    st_n = len(rows) - off_n
 
     def _high_conf_agree() -> Optional[float]:
-        num = den = 0
-        for r in rows:
-            if r.confidence is None or float(r.confidence) < 0.60:
-                continue
-            rp = r.comparison.run_pass_match
-            bk = r.comparison.summary_bucket_match
-            if rp is None or bk is None:
-                continue
-            den += 1
-            if rp and bk:
-                num += 1
+        num, den = high_confidence_full_agreement_counts(rows)
         if den == 0:
             return None
         return num / den
@@ -627,6 +722,8 @@ def compute_review_summary_metrics(rows: Sequence[UnifiedReviewRow]) -> ReviewSu
         total_rows=len(rows),
         rows_with_actual=with_actual,
         drives_with_rows=drives_n,
+        offensive_rows=off_n,
+        special_teams_rows=st_n,
         run_pass_match_rate=_rate(lambda r: r.comparison.run_pass_match),
         bucket_match_rate=_rate(lambda r: r.comparison.summary_bucket_match),
         family_match_rate=_rate(lambda r: r.comparison.family_match),
@@ -660,13 +757,15 @@ def group_unified_rows_by_drive(rows: Sequence[UnifiedReviewRow]) -> Dict[int, L
 
 
 def compute_quick_insights(rows: Sequence[UnifiedReviewRow]) -> List[str]:
-    """Lightweight coaching bullets (no heavy analytics)."""
+    """Lightweight coaching bullets — avoids duplicating pattern-analysis slices (see expanders)."""
     insights: List[str] = []
     mod_p = act_p = 0
     mod_tot = act_tot = 0
     by_dist: Dict[str, List[bool]] = {}
 
     for r in rows:
+        if r.event_segment != PlayEventSegment.OFFENSE:
+            continue
         mr = r.model_structured.get("run_pass")
         ar = r.actual_structured.get("run_pass")
         if mr in ("Run", "Pass"):
@@ -683,48 +782,25 @@ def compute_quick_insights(rows: Sequence[UnifiedReviewRow]) -> List[str]:
             dist = int(pre.get("distance", 0))
         except (TypeError, ValueError):
             d, dist = 0, 0
-        label = f"{d} & {dist}" if d else "other"
+        dist_for_bucket = dist if dist > 0 else 1
+        label = _distance_bucket_for_insights(dist_for_bucket) if d else "other"
         bm = r.comparison.summary_bucket_match
         if bm is not None:
             by_dist.setdefault(label, []).append(bool(bm))
 
-    if mod_tot and act_tot:
+    _MIN_TAGGED = 5
+    if mod_tot >= _MIN_TAGGED and act_tot >= _MIN_TAGGED:
         insights.append(
-            f"Model **pass rate {100 * mod_p / mod_tot:.0f}%** vs actual **{100 * act_p / act_tot:.0f}%** (run/pass tagged plays only)."
+            f"Model **pass rate {100 * mod_p / mod_tot:.0f}%** vs actual **{100 * act_p / act_tot:.0f}%** "
+            f"(run/pass tagged; n={mod_tot} model / {act_tot} actual)."
         )
 
-    early_mod_p = early_mod_t = early_act_p = early_act_t = 0
-    for r in rows:
-        pre = r.pre_snap
-        try:
-            d = int(pre.get("down", 0))
-        except (TypeError, ValueError):
-            d = 0
-        if d not in (1, 2):
-            continue
-        mr = r.model_structured.get("run_pass")
-        ar = r.actual_structured.get("run_pass")
-        if mr in ("Run", "Pass"):
-            early_mod_t += 1
-            if mr == "Pass":
-                early_mod_p += 1
-        if ar in ("Run", "Pass"):
-            early_act_t += 1
-            if ar == "Pass":
-                early_act_p += 1
-    if early_mod_t >= 3 and early_act_t >= 3:
-        mp = early_mod_p / early_mod_t
-        ap = early_act_p / early_act_t
-        if mp - ap >= 0.12:
-            insights.append("**Early downs (1st–2nd):** model **over-passed** vs actual tagged run/pass.")
-        elif ap - mp >= 0.12:
-            insights.append("**Early downs:** actual was **more pass-heavy** than the model.")
-
+    _MIN_BUCKET_SNAPS = 4
     best = worst = None
     best_r = -1.0
     worst_r = 2.0
     for label, bits in by_dist.items():
-        if len(bits) < 2:
+        if label == "other" or len(bits) < _MIN_BUCKET_SNAPS:
             continue
         rate = sum(bits) / len(bits)
         if rate > best_r:
@@ -734,9 +810,11 @@ def compute_quick_insights(rows: Sequence[UnifiedReviewRow]) -> List[str]:
 
     if best is not None and best_r >= 0:
         insights.append(
-            f"**Best bucket match:** {best} (~{100 * best_r:.0f}% on {len(by_dist.get(best, []))} snap(s))."
+            f"**Strongest distance bucket (bucket match):** {best} (~{100 * best_r:.0f}% on {len(by_dist[best])} snaps)."
         )
     if worst is not None and worst != best and worst_r <= 1:
-        insights.append(f"**Tough spot:** {worst} (~{100 * worst_r:.0f}% bucket match).")
+        insights.append(
+            f"**Weakest distance bucket (bucket match):** {worst} (~{100 * worst_r:.0f}% on {len(by_dist[worst])} snaps)."
+        )
 
     return insights[:6]

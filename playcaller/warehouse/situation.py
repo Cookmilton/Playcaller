@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from football_history_warehouse.query.situation.buckets import ClockBucket, ScoreDifferentialBucket
-from football_history_warehouse.query.situation.filter import PlaySituationFilter
+from football_history_warehouse.consumer import ClockBucket, PlaySituationFilter, ScoreDifferentialBucket
 
 from playcaller.domain import GameContext
 from playcaller.situation import yards_from_own_goal, yards_to_opponent_goal_from_abs

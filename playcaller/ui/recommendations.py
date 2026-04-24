@@ -24,8 +24,14 @@ from playcaller import (
 from playcaller.evaluation.snap_review_lifecycle import close_snap_review_row_with_logged_actual
 from playcaller.evaluation.snap_review_logging import merge_streamlit_snap_review_debug
 from playcaller.game_situation_input import format_ball_spot, format_clock_left_in_quarter
-from playcaller.streamlit_state.keys import LAST_DRIVE_SNAP_CONTEXT, PENDING_LOG_SITUATION, UNDO_BUNDLE
+from playcaller.streamlit_state.keys import (
+    LAST_DRIVE_SNAP_CONTEXT,
+    PENDING_LOG_SITUATION,
+    UNDO_BUNDLE,
+    WAREHOUSE_HISTORICAL_SIGNAL,
+)
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
+from playcaller.ui.historical_signal import render_historical_signal_panel
 from playcaller.ui.helpers import (
     LOG_OUTCOME_AUTO,
     LOG_OUTCOME_OPTIONS,
@@ -280,6 +286,8 @@ def render_recommendation_panel(
                 f'{FAM_LABEL.get(family,family)}{td_badge}{conf_badge}</div></div>',
                 unsafe_allow_html=True)
 
+            render_historical_signal_panel(st.session_state.get(WAREHOUSE_HISTORICAL_SIGNAL))
+
             # Situation strip (read at a glance)
             ball = format_ball_spot(territory=fctx.territory, yardline=int(fctx.yardline))
             period_ui = int(st.session_state.get("ui_game_period", fctx.quarter))
@@ -497,6 +505,7 @@ def render_recommendation_panel(
                     "distance": int(snap.distance),
                 }
                 st.session_state.result = None
+                st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
                 assign_session_state(st.session_state, "ui_auto_generate", True, context="quick_log_play")
                 invoke_post_play_hook(
                     snap,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import asdict, dataclass, field, fields, replace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from .domain import ActualPlayResult
 
@@ -103,6 +103,34 @@ class DriveResult:
 
 
 @dataclass
+class DriveFeedAuditSnapshot:
+    """
+    ESPN ``drives.previous[]`` fields captured at import for audits (optional).
+
+    Down/distance at first scrimmage snap are often omitted from summary JSON; those
+    fields stay empty unless we extend the ingest later.
+    """
+
+    espn_result_code: str = ""
+    espn_display_result: str = ""
+    espn_is_score: Optional[bool] = None
+    start_period: Optional[int] = None
+    start_clock_display: str = ""
+    start_yard_line: Optional[int] = None
+    start_field_text: str = ""
+    feed_offensive_plays: Optional[int] = None
+    feed_yards: Optional[int] = None
+    time_elapsed_display: str = ""
+    first_play_period: Optional[int] = None
+    first_play_clock_display: str = ""
+    end_period: Optional[int] = None
+    end_clock_display: str = ""
+    end_field_text: str = ""
+    # After TD: PAT / 2PT signal from drive play text (see ``espn_drive_audit_parse``).
+    espn_td_extra_point: Optional[Literal["pat", "two_point", "pat_missed"]] = None
+
+
+@dataclass
 class Drive:
     plays: List[ActualPlayResult] = field(default_factory=list)
     total_yards: int = 0
@@ -117,6 +145,8 @@ class Drive:
     feed_team_espn_id: str = ""
     feed_team_abbr: str = ""
     feed_team_display_name: str = ""
+    # ESPN drive-level metadata (see :class:`DriveFeedAuditSnapshot`); ``None`` for manual archives.
+    feed_audit: Optional["DriveFeedAuditSnapshot"] = None
 
     def with_computed_stats(
         self,
@@ -308,6 +338,7 @@ def complete_drive_from_plays(
     feed_team_espn_id: str = "",
     feed_team_abbr: str = "",
     feed_team_display_name: str = "",
+    feed_audit: Optional[DriveFeedAuditSnapshot] = None,
 ) -> Drive:
     """Build a finished ``Drive`` with stats + ``DriveResult``."""
     base = Drive(
@@ -316,6 +347,7 @@ def complete_drive_from_plays(
         feed_team_espn_id=str(feed_team_espn_id or ""),
         feed_team_abbr=str(feed_team_abbr or ""),
         feed_team_display_name=str(feed_team_display_name or ""),
+        feed_audit=feed_audit,
     )
     res = classify_drive_end(
         base.plays,
@@ -356,6 +388,13 @@ def _drive_result_from_dict(d: Optional[Dict[str, Any]]) -> Optional[DriveResult
     )
 
 
+def _drive_feed_audit_from_dict(d: Optional[Dict[str, Any]]) -> Optional[DriveFeedAuditSnapshot]:
+    if not d or not isinstance(d, dict):
+        return None
+    names = {f.name for f in fields(DriveFeedAuditSnapshot)}
+    return DriveFeedAuditSnapshot(**{k: v for k, v in d.items() if k in names})
+
+
 def _drive_from_dict(d: Dict[str, Any]) -> Drive:
     plays = [_actual_play_from_dict(p) for p in (d.get("plays") or [])]
     dr = _drive_result_from_dict(d.get("result"))
@@ -370,6 +409,7 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         feed_team_espn_id=str(d.get("feed_team_espn_id") or ""),
         feed_team_abbr=str(d.get("feed_team_abbr") or ""),
         feed_team_display_name=str(d.get("feed_team_display_name") or ""),
+        feed_audit=_drive_feed_audit_from_dict(d.get("feed_audit")),
     )
     return out
 
@@ -416,6 +456,8 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             row["feed_team_abbr"] = dr.feed_team_abbr
         if dr.feed_team_display_name:
             row["feed_team_display_name"] = dr.feed_team_display_name
+        if dr.feed_audit:
+            row["feed_audit"] = asdict(dr.feed_audit)
         payload["drives"].append(row)
     return payload
 
@@ -483,6 +525,7 @@ __all__ = [
     "DRIVE_END_TURNOVER_ON_DOWNS",
     "DRIVE_END_UNKNOWN",
     "Drive",
+    "DriveFeedAuditSnapshot",
     "DriveResult",
     "Game",
     "apply_scoring_after_drive",

@@ -11,6 +11,7 @@ from dataclasses import replace
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from playcaller import ActualPlayResult, FootballPlayPredictor, Game, GameContext
+from playcaller.play_event_segment import PlayEventSegment, segment_from_actual
 from playcaller.actual_result import (
     actual_play_structured_dict,
     format_actual_play_operator_detail,
@@ -20,13 +21,14 @@ from playcaller.game import Drive
 from playcaller.situation import advance_game_state_after_actual
 from playcaller.state import DriveLogger
 
+from playcaller.evaluation.audit import top_family_score_pairs
+
 from .analysis_types import ActualVsReplayComparisonRow, PreSnapContextRecord
 from .comparison import (
     actual_run_pass_bucket,
     family_match_actual_vs_replay,
     model_replay_one_line,
     model_replay_structured_from_recommend,
-    pre_snap_record_from_context,
 )
 from .replay_taxonomy import actual_play_summary_bucket, coarse_bucket_alignment
 
@@ -48,7 +50,8 @@ ANCHOR_CANDIDATES: Tuple[Tuple[str, int, int, int, str], ...] = (
 )
 
 OVERLAY_NOTE = (
-    "Defense, weather, and clock use the **current console** as an overlay — not per-snap history."
+    "Defense, weather, and timeouts use the **current console** as an overlay. "
+    "Quarter and game clock on each row come from the **ESPN play feed** (or reconciliation), not the live clock."
 )
 
 
@@ -215,40 +218,38 @@ def build_replay_game_context(
     )
 
 
-def _fallback_pre_snap(
+def _pre_snap_for_archived_index(
+    i: int,
+    plist: List[ActualPlayResult],
+    chain: List[Tuple[str, int, int, int]],
     *,
+    drive: Drive,
     ambient_ctx: GameContext,
     score_diff: int,
+    reconciled: object,
     anchor_tag: str,
     recon_notes: str,
-    play_idx0: int,
-    chain: List[Tuple[str, int, int, int]],
 ) -> PreSnapContextRecord:
-    if play_idx0 < len(chain):
-        t, y, d, dist = chain[play_idx0]
-    else:
-        t, y, d, dist = (
-            DEFAULT_START_TERRITORY,
-            DEFAULT_START_YARDLINE,
-            DEFAULT_START_DOWN,
-            DEFAULT_START_DISTANCE,
-        )
-    return PreSnapContextRecord(
-        territory=t,
-        yardline=y,
-        down=d,
-        distance=dist,
-        quarter=int(ambient_ctx.quarter),
-        seconds_remaining=int(ambient_ctx.seconds_remaining),
-        score_diff=int(score_diff),
-        own_timeouts=int(ambient_ctx.own_timeouts),
-        opp_timeouts=int(ambient_ctx.opp_timeouts),
-        plays_this_drive_before_snap=max(0, play_idx0),
+    """Pre-snap record for replay rows: quarter/clock from ESPN feed + reconciliation, not session overlay."""
+    from playcaller.reconciliation.play_context import build_pre_snap_record_for_archived_replay
+
+    play = plist[i]
+    prior = plist[i - 1] if i > 0 else None
+    prefix_log = _drive_logger_prefix(plist, i)
+    chain_tuple: Optional[Tuple[str, int, int, int]] = chain[i] if i < len(chain) else None
+    return build_pre_snap_record_for_archived_replay(
+        chain_tuple=chain_tuple,
+        play_idx0=i,
+        play=play,
+        prior_play=prior,
+        ambient_ctx=ambient_ctx,
+        score_diff=score_diff,
+        plays_before=len(prefix_log.results),
+        reconciled=reconciled,
         reconstruction_anchor=anchor_tag,
         reconstruction_notes=recon_notes,
-        def_personnel=str(ambient_ctx.def_personnel),
-        coverage_shell=str(ambient_ctx.coverage_shell),
-        weather=str(ambient_ctx.weather),
+        offense_team_abbr=str(getattr(drive, "feed_team_abbr", "") or ""),
+        defense_team_abbr="OPP",
     )
 
 
@@ -266,6 +267,10 @@ def comparison_rows_for_archived_drive(
         return rows
 
     chain, chain_err, anchor_tag = best_presnap_chain_for_drive_plays(plist)
+    # Local import avoids circular import: drive_reconciler imports this module for chain heuristics.
+    from playcaller.reconciliation.drive_reconciler import reconcile_drive
+
+    reconciled = reconcile_drive(drive, espn=drive.feed_audit)
     score_diff = score_diff_for_archived_possession(game, getattr(drive, "possessing_team", "offense"))
     recon_notes = f"{OVERLAY_NOTE} Anchor: {anchor_tag.replace('_', ' ')}."
     if chain_err:
@@ -279,13 +284,16 @@ def comparison_rows_for_archived_drive(
         act_bucket = actual_play_summary_bucket(play)
 
         if chain_err == "touchdown_mid_drive" and i >= len(chain):
-            pre = _fallback_pre_snap(
+            pre = _pre_snap_for_archived_index(
+                i,
+                plist,
+                chain,
+                drive=drive,
                 ambient_ctx=ambient_ctx,
                 score_diff=score_diff,
+                reconciled=reconciled,
                 anchor_tag=anchor_tag,
                 recon_notes=recon_notes,
-                play_idx0=i,
-                chain=chain,
             )
             rows.append(
                 ActualVsReplayComparisonRow(
@@ -310,13 +318,16 @@ def comparison_rows_for_archived_drive(
             continue
 
         if chain_err == "situation_advance_failed" and i >= len(chain):
-            pre = _fallback_pre_snap(
+            pre = _pre_snap_for_archived_index(
+                i,
+                plist,
+                chain,
+                drive=drive,
                 ambient_ctx=ambient_ctx,
                 score_diff=score_diff,
+                reconciled=reconciled,
                 anchor_tag=anchor_tag,
                 recon_notes=recon_notes,
-                play_idx0=i,
-                chain=chain,
             )
             rows.append(
                 ActualVsReplayComparisonRow(
@@ -341,13 +352,16 @@ def comparison_rows_for_archived_drive(
             continue
 
         if i >= len(chain):
-            pre = _fallback_pre_snap(
+            pre = _pre_snap_for_archived_index(
+                i,
+                plist,
+                chain,
+                drive=drive,
                 ambient_ctx=ambient_ctx,
                 score_diff=score_diff,
+                reconciled=reconciled,
                 anchor_tag=anchor_tag,
                 recon_notes=recon_notes,
-                play_idx0=i,
-                chain=chain,
             )
             rows.append(
                 ActualVsReplayComparisonRow(
@@ -382,12 +396,40 @@ def comparison_rows_for_archived_drive(
             drive_log=prefix_log,
             score_diff=score_diff,
         )
-        pre = pre_snap_record_from_context(
-            ctx,
-            plays_before=len(prefix_log.results),
-            reconstruction_anchor=anchor_tag,
-            reconstruction_notes=recon_notes,
+        pre = _pre_snap_for_archived_index(
+            i,
+            plist,
+            chain,
+            drive=drive,
+            ambient_ctx=ambient_ctx,
+            score_diff=score_diff,
+            reconciled=reconciled,
+            anchor_tag=anchor_tag,
+            recon_notes=recon_notes,
         )
+
+        if segment_from_actual(play) != PlayEventSegment.OFFENSE:
+            rows.append(
+                ActualVsReplayComparisonRow(
+                    play_index=i + 1,
+                    pre_snap_context=pre,
+                    actual_play_summary_primary=primary,
+                    actual_play_summary_detail=detail,
+                    actual_structured_result=actual_struct,
+                    model_replay_summary="",
+                    model_replay_structured=None,
+                    actual_run_pass=actual_rp,
+                    model_run_pass=None,
+                    run_pass_match=None,
+                    family_match=None,
+                    actual_summary_bucket=act_bucket,
+                    replay_summary_bucket="",
+                    coarse_bucket_match=None,
+                    chain_error=chain_err,
+                    replay_error="Special teams — no offensive model call",
+                )
+            )
+            continue
 
         try:
             rec = predictor.recommend(ctx, drive_log=prefix_log, game=None, historical_plays=None)
@@ -414,6 +456,7 @@ def comparison_rows_for_archived_drive(
             )
             continue
 
+        ranked_scores = top_family_score_pairs(rec.get("scores") or {}, n=6)
         structured = model_replay_structured_from_recommend(rec)
         summary_line = model_replay_one_line(structured) if structured else ""
         model_rp = structured.run_pass if structured else None
@@ -447,6 +490,7 @@ def comparison_rows_for_archived_drive(
                 coarse_bucket_match=coarse,
                 chain_error=chain_err,
                 replay_error=None if structured else REPLAY_UNAVAILABLE,
+                top_family_scores=ranked_scores,
             )
         )
 
@@ -459,7 +503,7 @@ def predictor_replay_cache_token(predictor: FootballPlayPredictor) -> str:
 
 
 def ambient_replay_overlay_fingerprint(ctx: GameContext) -> str:
-    """Overlay fields that affect replay (reconstructed down/distance are excluded)."""
+    """Overlay fields that affect replay (defense, weather, timeouts — not game clock; Q/clock come from ESPN feed)."""
     parts = (
         str(ctx.def_personnel),
         str(ctx.box_count),
@@ -467,8 +511,6 @@ def ambient_replay_overlay_fingerprint(ctx: GameContext) -> str:
         str(ctx.blitz_likely),
         str(ctx.safeties),
         str(ctx.score_diff),
-        str(ctx.quarter),
-        str(ctx.seconds_remaining),
         str(ctx.own_timeouts),
         str(ctx.opp_timeouts),
         str(ctx.weather),

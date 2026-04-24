@@ -45,15 +45,21 @@ from playcaller.review.unified_review import (
     export_review_capability_bullets,
     resolve_review_mode,
 )
+from warehouse.review_loader import (
+    list_available_processed_games,
+    warehouse_bundle_from_processed_path,
+)
 from playcaller.session_game_metadata import (
     format_session_metadata_markdown,
     session_audit_identity_warning,
 )
 from playcaller.ui.product_copy import (
     PAGE_TITLE_REVIEW,
+    REVIEW_CAPTION_WAREHOUSE_MODEL_PANELS,
     REVIEW_MESSAGE_NONE,
     REVIEW_PAGE_TITLE,
     REVIEW_SECTION_SESSION_RECORD,
+    REVIEW_WAREHOUSE_EMPTY_PROCESSED,
 )
 from playcaller.ui.review_film_room import render_film_room, render_review_sidebar_controls
 
@@ -89,15 +95,19 @@ def run_review_session_page() -> None:
     st.markdown("### Review source")
     source = st.radio(
         "Load game from",
-        ["Current session", "Upload game JSON"],
+        ["Current session", "Upload game JSON", "Warehouse processed JSON"],
         horizontal=True,
         key="review_page_source",
-        help="Session mode uses whatever is in memory on the main page. Upload uses an exported JSON file.",
+        help="Session mode uses whatever is in memory on the main page. Upload uses an exported Play Caller JSON. "
+        "Warehouse uses **data/processed/...** shape: `game`, `plays`, `features` (from `python -m warehouse.pipeline`).",
     )
 
     game = None
     upload_payload: dict | None = None
     _review_upload_filename: str | None = None
+    warehouse_mode = False
+    unified_rows: list | None = None
+
     if source == "Current session":
         game = st.session_state.get("game")
         if game is None:
@@ -106,7 +116,7 @@ def run_review_session_page() -> None:
         if isinstance(game, Game):
             ensure_snap_review_list_on_game(game)
             apply_session_setup_widgets_to_game(game, st.session_state)
-    else:
+    elif source == "Upload game JSON":
         up = st.file_uploader("Game JSON", type=["json"], key="review_page_upload")
         if up is None:
             st.info(
@@ -130,11 +140,66 @@ def run_review_session_page() -> None:
         except Exception as e:
             st.error(f"**Could not load game** — JSON parsed, but this object is not a valid exported game: {e}")
             st.stop()
+    elif source == "Warehouse processed JSON":
+        processed_root = _root / "data" / "processed"
+        entries = list_available_processed_games(processed_root)
+        if not entries:
+            st.info(REVIEW_WAREHOUSE_EMPTY_PROCESSED)
+            st.stop()
+        by_path = {str(e.path): e for e in entries}
+        path_options = [str(e.path) for e in entries]
+        chosen_path = st.selectbox(
+            "Processed game",
+            options=path_options,
+            format_func=lambda p: by_path[p].matchup_label,
+            key="review_warehouse_processed_select",
+        )
+        _wh_path = Path(chosen_path)
+        _wh_name = _wh_path.name
+        _wh_ent = by_path[chosen_path]
+        try:
+            with st.spinner("Loading processed game…"):
+                game, unified_rows = warehouse_bundle_from_processed_path(chosen_path)
+        except FileNotFoundError:
+            st.error(
+                f"**File not found:** `{_wh_name}` — it may have been moved or deleted. "
+                f"Full path: `{chosen_path}`"
+            )
+            st.stop()
+        except ValueError as e:
+            err = str(e).lower()
+            if "invalid json" in err or "json" in err:
+                st.error(
+                    f"**Invalid or damaged JSON** in `{_wh_name}` — re-run **`python -m warehouse.pipeline`** "
+                    f"(or bulk ingest) for that week, then try again.\n\nDetails: {e}"
+                )
+            else:
+                st.error(f"**Could not load processed game** `{_wh_name}`: {e}")
+            st.stop()
+        except (KeyError, TypeError) as e:
+            st.error(
+                f"**Processed file is missing expected fields** (`{_wh_name}`) — it may be the wrong shape. "
+                f"Re-run ingestion for that week. Details: {type(e).__name__}: {e}"
+            )
+            st.stop()
+        except Exception as e:  # pragma: no cover - keep page alive
+            st.error(
+                f"**Unexpected error loading** `{_wh_name}`: {type(e).__name__}: {e}. "
+                "If this persists, re-run warehouse ingestion for that week."
+            )
+            st.stop()
+        ensure_snap_review_list_on_game(game)
+        warehouse_mode = True
+        _review_upload_filename = chosen_path
+        _warehouse_matchup_caption = f"{_wh_ent.matchup_label} · id `{_wh_ent.game_id}`"
 
     assert game is not None
     raw_audit = list(game.recommendation_audit or [])
     timeline = review_timeline_rows(raw_audit)
-    mode = resolve_review_mode(game, upload_payload=upload_payload, timeline=timeline)
+    if warehouse_mode:
+        mode = ReviewMode.WAREHOUSE_HISTORICAL
+    else:
+        mode = resolve_review_mode(game, upload_payload=upload_payload, timeline=timeline)
 
     if mode == ReviewMode.NOT_REVIEWABLE:
         st.warning(REVIEW_MESSAGE_NONE)
@@ -144,35 +209,36 @@ def run_review_session_page() -> None:
         st.success("**Game JSON loaded successfully.**")
         if _review_upload_filename:
             st.caption(f"File: `{_review_upload_filename}`")
-
-    st.markdown(f"### {REVIEW_SECTION_SESSION_RECORD}")
-    st.markdown(format_session_metadata_markdown(game.session_metadata))
-    for line in export_review_capability_bullets(game, mode=mode):
-        st.caption(line)
-
-    _id_warn = session_audit_identity_warning(game.session_metadata, raw_audit)
-    if _id_warn:
-        st.warning(_id_warn)
+    elif warehouse_mode:
+        st.success("**Warehouse processed JSON loaded.**")
+        if _review_upload_filename:
+            st.caption(f"**{_warehouse_matchup_caption}** · file `{Path(_review_upload_filename).name}`")
 
     our_id = coached_team_espn_id_for_previous_drives(st.session_state)
-    if mode in (ReviewMode.TRUE_STORED, ReviewMode.LEGACY_STORED):
-        unified_rows = build_unified_rows_from_audit(game, timeline, mode, our_coached_espn_id=our_id)
-    else:
-        predictor = st.session_state.get("predictor")
-        if not isinstance(predictor, FootballPlayPredictor):
-            st.error(
-                "**Predictor unavailable** — session defaults could not build an engine instance. "
-                "Reload the app or open the main **Play Caller** page once, then return."
+    if not warehouse_mode:
+        if mode in (ReviewMode.TRUE_STORED, ReviewMode.LEGACY_STORED):
+            unified_rows = build_unified_rows_from_audit(game, timeline, mode, our_coached_espn_id=our_id)
+        else:
+            predictor = st.session_state.get("predictor")
+            if not isinstance(predictor, FootballPlayPredictor):
+                st.error(
+                    "**Predictor unavailable** — session defaults could not build an engine instance. "
+                    "Reload the app or open the main **Play Caller** page once, then return."
+                )
+                st.stop()
+            ambient = build_ambient_context_for_model_replay(st.session_state, game)
+            unified_rows = build_unified_rows_from_replay(
+                game,
+                st.session_state,
+                predictor=predictor,
+                ambient_ctx=ambient,
+                our_coached_espn_id=our_id,
             )
-            st.stop()
-        ambient = build_ambient_context_for_model_replay(st.session_state, game)
-        unified_rows = build_unified_rows_from_replay(
-            game,
-            st.session_state,
-            predictor=predictor,
-            ambient_ctx=ambient,
-            our_coached_espn_id=our_id,
-        )
+
+    assert unified_rows is not None
+
+    if warehouse_mode:
+        st.caption(REVIEW_CAPTION_WAREHOUSE_MODEL_PANELS)
 
     flt, show_conf, breakdown_expanded = render_review_sidebar_controls()
     render_film_room(
@@ -183,6 +249,16 @@ def run_review_session_page() -> None:
         show_conf=show_conf,
         breakdown_expanded=breakdown_expanded,
     )
+
+    st.divider()
+    st.markdown(f"### {REVIEW_SECTION_SESSION_RECORD}")
+    st.markdown(format_session_metadata_markdown(game.session_metadata))
+    for line in export_review_capability_bullets(game, mode=mode):
+        st.caption(line)
+
+    _id_warn = session_audit_identity_warning(game.session_metadata, raw_audit)
+    if _id_warn:
+        st.warning(_id_warn)
 
     if timeline and mode in (ReviewMode.TRUE_STORED, ReviewMode.LEGACY_STORED):
         st.divider()

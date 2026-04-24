@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from .espn_completed_drives import extract_completed_drives_from_espn_payload
+from .espn_game_state import (
+    infer_espn_period,
+    intish,
+    resolve_espn_clock_seconds,
+    snapshot_state_sanity_flags,
+)
 from .espn_summary_teams import team_labels_from_espn_summary
 from .http_util import fetch_json
 from .types import FeedPlayEvent, FetchResult, NormalizedGameSnapshot
@@ -26,33 +32,6 @@ def summary_url(sport: Sport, event_id: str) -> str:
 
 def scoreboard_url(sport: Sport) -> str:
     return f"https://site.api.espn.com/apis/site/v2/sports/{_sport_path(sport)}/scoreboard"
-
-
-def _parse_clock_to_seconds(display_clock: Optional[str]) -> Optional[int]:
-    if not display_clock:
-        return None
-    s = str(display_clock).strip()
-    if not s or s.lower() in ("0:00", "00:00"):
-        return 0
-    parts = s.replace(" ", "").split(":")
-    try:
-        if len(parts) == 2:
-            m, sec = int(parts[0]), int(parts[1])
-            return max(0, min(15 * 60, m * 60 + sec))
-        if len(parts) == 1:
-            return max(0, int(parts[0]))
-    except ValueError:
-        return None
-    return None
-
-
-def _intish(v: Any) -> Optional[int]:
-    if v is None:
-        return None
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return None
 
 
 def _competition(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -237,8 +216,18 @@ def parse_espn_summary(
     typ = status.get("type") or {}
     is_final = bool(typ.get("completed"))
     status_detail = str(typ.get("detail") or typ.get("shortDetail") or "")
-    quarter = _intish(status.get("period"))
-    clock_seconds_in_period = _parse_clock_to_seconds(status.get("displayClock"))
+    notes: List[str] = []
+    quarter, period_notes = infer_espn_period(status)
+    notes.extend(list(period_notes))
+    clock_seconds_in_period, clock_notes, clock_resolution = resolve_espn_clock_seconds(payload, status)
+    notes.extend(list(clock_notes))
+    for flag in snapshot_state_sanity_flags(
+        quarter=quarter,
+        clock_seconds=clock_seconds_in_period,
+        is_final=is_final,
+        status_detail=status_detail,
+    ):
+        notes.append(f"sanity:{flag}")
 
     situation = comp.get("situation")
     situation = situation if isinstance(situation, dict) else None
@@ -246,12 +235,11 @@ def parse_espn_summary(
     down = distance = None
     abs_yards: Optional[int] = None
     possession_team_id: Optional[str] = None
-    notes: List[str] = []
 
     if situation:
-        down = _intish(situation.get("down"))
-        distance = _intish(situation.get("distance"))
-        yte = _intish(situation.get("yardsToEndzone"))
+        down = intish(situation.get("down"))
+        distance = intish(situation.get("distance"))
+        yte = intish(situation.get("yardsToEndzone"))
         if yte is not None:
             ytc = max(0, min(99, yte))
             abs_yards = 99 if ytc == 0 else max(1, min(99, 100 - ytc))
@@ -271,13 +259,13 @@ def parse_espn_summary(
         tid = str(co.get("id") or "")
         if not tid:
             continue
-        sc = _intish(co.get("score"))
+        sc = intish(co.get("score"))
         if tid == oid:
             our_score = sc
         else:
             opp_score = sc
         # ESPN sometimes lists timeouts on competitor during live games
-        to = _intish(co.get("timeouts"))
+        to = intish(co.get("timeouts"))
         if to is not None:
             if tid == oid:
                 our_tos = to
@@ -339,6 +327,7 @@ def parse_espn_summary(
         is_final=is_final,
         new_plays=tuple(new_plays),
         debug_notes=tuple(notes),
+        clock_resolution=clock_resolution,
         coached_team_id=str(our_team_id),
         completed_feed_drives=completed_drives,
         current_feed_drive_plays=current_feed_plays,
@@ -363,6 +352,7 @@ def _extract_recent_plays(
             plays_raw = list(prev[-1].get("plays") or [])
             notes.append("Using last archived drive for play tail (no current drive).")
     events: List[FeedPlayEvent] = []
+    empty_text_rows = 0
     for p in plays_raw[-8:]:
         if not isinstance(p, dict):
             continue
@@ -374,9 +364,10 @@ def _extract_recent_plays(
             text = str(tx.get("text") or "")
         else:
             text = str(p.get("description") or "")
-        if not text:
-            text = "(no description)"
-        yds = _intish(p.get("statYardage"))
+        if not text.strip():
+            empty_text_rows += 1
+            text = "(no ESPN description)"
+        yds = intish(p.get("statYardage"))
         ty = p.get("type")
         if isinstance(ty, dict):
             ptype = str(ty.get("text") or "").lower()
@@ -389,11 +380,17 @@ def _extract_recent_plays(
             th = "pass"
         elif "penalty" in text_l:
             th = "penalty"
+        elif "kickoff" in text_l or ptype == "kickoff":
+            th = "kickoff"
         elif "kick" in text_l or "punt" in text_l or "field goal" in text_l:
             th = "kick"
         else:
             th = "unknown"
         events.append(FeedPlayEvent(event_id=pid, summary_text=text, yards_gained=yds, type_hint=th))
+    if empty_text_rows:
+        notes.append(
+            f"feed: {empty_text_rows} play row(s) had empty description text (placeholders only for feed logging)."
+        )
     _ = possession_team_id  # reserved for future filtering by team
     return events, notes
 
@@ -415,4 +412,5 @@ class EspnFootballProvider:
             ok=True,
             snapshot=snap,
             used_insecure_ssl_fallback=res.used_insecure_ssl_fallback,
+            raw_summary=res.data if isinstance(res.data, dict) else None,
         )

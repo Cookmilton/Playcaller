@@ -12,6 +12,10 @@ Small package that separates:
 The root exports keep imports ergonomic for the app.
 """
 
+from .env_bootstrap import ensure_repo_dotenv_loaded
+
+ensure_repo_dotenv_loaded()
+
 from .domain import (
     FG_RANGE_YARDLINE,
     PASS_FAMILIES,

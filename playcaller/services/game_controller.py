@@ -45,9 +45,12 @@ from playcaller.streamlit_state.keys import (
     PENDING_LOG_SITUATION,
     UI_HISTORICAL_NUDGE_ENABLED,
     UI_WAREHOUSE_ADVISORY_ENABLED,
+    UI_WAREHOUSE_LAST_GENERATE_STATUS,
     UNDO_BUNDLE,
+    WAREHOUSE_HISTORICAL_SIGNAL,
 )
 from playcaller.warehouse.binding import build_warehouse_binding
+from playcaller.services.predictor_with_history import get_recommendation_with_history
 from football_history_warehouse.consumer import try_client_from_env
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
 from playcaller.game_situation_input import context_quarter_from_period
@@ -106,6 +109,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     dl.reset()
     trim_snap_review_opens_for_play_count(g.recommendation_audit, plays_on_drive=len(dl.results))
     st.session_state.result = None
+    st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
     st.session_state.last_play_summary = ""
     clear_in_progress_log_state(st.session_state)
     st.session_state.eval_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0)) + 1
@@ -183,6 +187,7 @@ def undo_last_logged_play() -> None:
         "distance": int(bundle["distance"]),
     }
     st.session_state.result = None
+    st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
     assign_session_state(st.session_state, "ui_auto_generate", False, context="undo_last_logged_play")
     st.session_state.last_play_summary = (
         "Undid last logged play — situation restored to that snap. Tap **Generate** when ready."
@@ -272,7 +277,8 @@ def run_generate_if_requested(
         else None
     )
     try:
-        st.session_state.result = predictor.recommend(
+        rec, hist = get_recommendation_with_history(
+            predictor,
             ctx,
             drive_log,
             canon,
@@ -281,10 +287,45 @@ def run_generate_if_requested(
             warehouse_client=wh_client,
             warehouse_binding=wh_binding,
         )
+        st.session_state.result = rec
+        st.session_state[WAREHOUSE_HISTORICAL_SIGNAL] = hist
     except Exception as e:
         st.session_state.result = None
+        st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
         st.error(f"Could not generate a play call: {e}")
     assign_session_state(st.session_state, "ui_auto_generate", False, context="run_generate_if_requested")
+
+    if st.session_state.result is not None:
+        if wh_adv:
+            wa = st.session_state.result.get("warehouse_advisory")
+            if isinstance(wa, dict):
+                notes = wa.get("notes")
+                err = wa.get("errors")
+                detail = "advisory payload attached"
+                if isinstance(notes, list) and notes:
+                    detail = str(notes[0])
+                elif isinstance(err, list) and err:
+                    detail = "; ".join(str(x) for x in err[:3])
+                st.session_state[UI_WAREHOUSE_LAST_GENERATE_STATUS] = {
+                    "sought": True,
+                    "advisory_enabled": bool(wa.get("enabled")),
+                    "detail": detail,
+                }
+            else:
+                st.session_state[UI_WAREHOUSE_LAST_GENERATE_STATUS] = {
+                    "sought": True,
+                    "advisory_enabled": None,
+                    "detail": "missing warehouse_advisory",
+                }
+        else:
+            st.session_state[UI_WAREHOUSE_LAST_GENERATE_STATUS] = {"sought": False}
+    elif wh_adv:
+        st.session_state[UI_WAREHOUSE_LAST_GENERATE_STATUS] = {
+            "sought": True,
+            "advisory_enabled": None,
+            "detail": "generate failed or no result",
+        }
+
     if st.session_state.result is not None:
         rec = record_open_snap_review_row_after_generate(
             rows=canon.recommendation_audit,

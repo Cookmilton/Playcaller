@@ -123,13 +123,14 @@ def test_apply_snapshot_imports_drives_once() -> None:
         snapshot=snap,
         options=SyncOptions(),
     )
-    assert res.drives_imported == 1
-    assert len(game.drives) == 1
-    assert game.drives[0].feed_import_tag == "espn"
-    assert game.drives[0].feed_team_espn_id == "14"
-    assert game.drives[0].feed_team_abbr == "LAR"
-    assert "Rams" in game.drives[0].feed_team_display_name
-    assert game.drives[0].result is not None
+    assert res.drives_imported == 2
+    assert len(game.drives) == 2
+    ours = [d for d in game.drives if d.feed_team_espn_id == "14"]
+    assert len(ours) == 1
+    assert ours[0].feed_import_tag == "espn"
+    assert ours[0].feed_team_abbr == "LAR"
+    assert "Rams" in ours[0].feed_team_display_name
+    assert ours[0].result is not None
     res2 = apply_snapshot(
         game=game,
         session=session,
@@ -138,7 +139,7 @@ def test_apply_snapshot_imports_drives_once() -> None:
         options=SyncOptions(),
     )
     assert res2.drives_imported == 0
-    assert len(game.drives) == 1
+    assert len(game.drives) == 2
 
 
 def test_apply_snapshot_imports_both_teams_when_scope_both() -> None:
@@ -156,7 +157,8 @@ def test_apply_snapshot_imports_both_teams_when_scope_both() -> None:
     assert {d.feed_team_espn_id for d in game.drives} == {"10", "14"}
 
 
-def test_merge_completed_opponent_scope_imports_non_coached_team_only() -> None:
+def test_merge_completed_ignores_feed_team_scope_for_storage() -> None:
+    """Completed drives always merge into ``game.drives``; UI filters by scope separately."""
     payload = _load_fixture()
     drives = extract_completed_drives_from_espn_payload(payload, event_id="401test001")
     game = Game.new_game()
@@ -164,9 +166,9 @@ def test_merge_completed_opponent_scope_imports_non_coached_team_only() -> None:
     n, _ = merge_completed_espn_drives_into_game(
         game, ss, drives, coached_team_id="14", feed_team_scope=PREVIOUS_DRIVES_FILTER_OPPONENT
     )
-    assert n == 1
-    assert len(game.drives) == 1
-    assert game.drives[0].feed_team_espn_id == "10"
+    assert n == 2
+    assert len(game.drives) == 2
+    assert {d.feed_team_espn_id for d in game.drives} == {"10", "14"}
 
 
 def test_merge_completed_drives_dedup_stable_keys() -> None:

@@ -14,10 +14,17 @@ from sqlalchemy.engine import Engine
 
 from football_history_warehouse.config.database import DatabaseConfig
 from football_history_warehouse.config.exceptions import WarehouseConfigError
-from football_history_warehouse.consumer.dtos import PlaysBySituationPage, SituationOutcomeSummary, TeamTendencySummary
+from football_history_warehouse.consumer.dtos import (
+    GameInventoryPage,
+    PlaysBySituationPage,
+    SituationOutcomeSummary,
+    TeamTendencySummary,
+)
+from football_history_warehouse.consumer.inventory_filters import GameInventoryFilters
 from football_history_warehouse.query.pagination import DEFAULT_PAGE_LIMIT, PageParams
 from football_history_warehouse.query.services.analytics import WarehouseAnalyticsService
 from football_history_warehouse.query.services.history import FootballHistoryQueryService
+from football_history_warehouse.query.services.inventory import WarehouseInventoryService
 from football_history_warehouse.query.situation.filter import PlaySituationFilter
 from football_history_warehouse.review.schema import GameReviewPackage
 from football_history_warehouse.review.service import build_game_review_package
@@ -103,6 +110,24 @@ class FootballWarehouseClient:
             analytics = WarehouseAnalyticsService(session)
             counts, total = analytics.outcome_category_counts(situation)
         return SituationOutcomeSummary.from_category_counts(counts, total)
+
+    def list_games_inventory(
+        self,
+        filters: GameInventoryFilters | None = None,
+        *,
+        page: PageParams | None = None,
+    ) -> GameInventoryPage:
+        """
+        Operator-facing list of games in the warehouse with drive/play counts and import hints.
+
+        Read-only; does not mutate storage. Uses bounded pagination (see :class:`PageParams`).
+        """
+        f = filters or GameInventoryFilters()
+        p = page or PageParams(limit=DEFAULT_PAGE_LIMIT, offset=0)
+        with session_scope(self._engine) as session:
+            svc = WarehouseInventoryService(session)
+            items, has_more = svc.list_game_inventory_page(f, p)
+        return GameInventoryPage(games=items, limit=p.limit, offset=p.offset, has_more=has_more)
 
 
 def try_client_from_env(*, echo_sql: bool = False) -> FootballWarehouseClient | None:

@@ -104,6 +104,23 @@ class ActualPlayResult:
     feed_rusher_jersey: str = ""
     # Defender / pass rusher only when explicitly present (e.g. structured sackedBy).
     feed_defender_label: str = ""
+    # ESPN summary ``drives.*.plays[]`` pre-snap metadata (when imported from feed; None for manual).
+    feed_period_number: Optional[int] = None
+    feed_clock_display: Optional[str] = None
+    feed_presnap_down: Optional[int] = None
+    feed_presnap_distance: Optional[int] = None
+    # Raw ESPN ``start.yardLine`` (often equals yards-to-endzone on summary plays).
+    feed_start_yard_line: Optional[int] = None
+    feed_yards_to_endzone: Optional[int] = None
+    # Canonical field (1–50, ``GameContext`` / ``situation.py`` convention) after parse.
+    feed_presnap_territory: Optional[str] = None  # "own" | "opponents"
+    feed_presnap_yardline: Optional[int] = None
+    feed_possession_team_id: Optional[str] = None
+    feed_possession_team_abbr: Optional[str] = None
+    # True when ESPN text indicates ``& Goal`` (structured distance may still be numeric).
+    feed_presnap_goal_down: bool = False
+    feed_home_score: Optional[int] = None
+    feed_away_score: Optional[int] = None
 
 
 # Backwards-compatible name for drive logging (same shape as ``ActualPlayResult``).

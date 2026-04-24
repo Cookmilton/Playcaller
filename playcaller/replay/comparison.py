@@ -23,7 +23,7 @@ def actual_run_pass_bucket(actual: ActualPlayResult) -> Optional[str]:
     if pt in ("pass", "qb_scramble", "qb_run"):
         return "Pass"
     rt = str(actual.result_type or "").lower()
-    if rt in ("field_goal", "field_goal_miss", "punt"):
+    if rt in ("field_goal", "field_goal_miss", "punt", "kickoff", "extra_point", "extra_point_miss"):
         return None
     return None
 
@@ -105,6 +105,14 @@ def pre_snap_record_from_context(
     reconstruction_anchor: str,
     reconstruction_notes: str = "",
 ) -> PreSnapContextRecord:
+    live = (
+        ("down", "live_console"),
+        ("distance", "live_console"),
+        ("territory", "live_console"),
+        ("yard_line", "live_console"),
+        ("quarter", "live_console"),
+        ("seconds", "live_console"),
+    )
     return PreSnapContextRecord(
         territory=str(ctx.territory),
         yardline=int(ctx.yardline),
@@ -118,7 +126,14 @@ def pre_snap_record_from_context(
         plays_this_drive_before_snap=int(plays_before),
         reconstruction_anchor=reconstruction_anchor,
         reconstruction_notes=reconstruction_notes or "",
+        clock_display=None,
+        home_score_snap=None,
+        away_score_snap=None,
+        snap_provenance=live,
         def_personnel=str(ctx.def_personnel),
         coverage_shell=str(ctx.coverage_shell),
         weather=str(ctx.weather),
+        goal_to_go=False,
+        possession_team_abbrev="",
+        opponent_team_abbrev="",
     )

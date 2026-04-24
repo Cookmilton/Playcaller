@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, List, MutableMapping, Set, Tuple
+
+logger = logging.getLogger(__name__)
+
+# Retain last displayClock/numeric reading only within this wall-clock gap (seconds) and same period.
+_TRUSTED_CLOCK_MAX_AGE_SEC = 45.0
 
 from playcaller.streamlit_state.keys import (
     GAME_DISTANCE,
@@ -23,6 +29,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_SYNC_EPOCH,
     LIVE_FEED_MANUAL_NOTE,
     LIVE_FEED_TEAM_SCOPE,
+    LIVE_FEED_TRUSTED_CLOCK,
 )
 from playcaller.streamlit_state.widget_backend_bridge import request_widget_hydrate_from_backend
 
@@ -51,6 +58,8 @@ def _family_from_feed_event(ev: FeedPlayEvent) -> str:
         return "inside_zone"
     if ev.type_hint == "pass":
         return "dropback_pass"
+    if ev.type_hint == "kickoff":
+        return "special_teams"
     return "dropback_pass"
 
 
@@ -84,6 +93,7 @@ def apply_snapshot(
     """
     applied: List[str] = []
     skipped: List[str] = []
+    debug_notes_extra: List[str] = []
 
     if snapshot.quarter is not None:
         q = max(1, min(5, int(snapshot.quarter)))
@@ -98,6 +108,50 @@ def apply_snapshot(
         session[GAME_QUARTER_CLOCK_SECS] = sec % 60
         game.clock_seconds_remaining = sec
         applied.append("clock")
+        if snapshot.clock_resolution in ("display_clock", "numeric_status"):
+            session[LIVE_FEED_TRUSTED_CLOCK] = {
+                "period": period,
+                "seconds": sec,
+                "epoch": float(snapshot.fetched_at_epoch),
+                "source": snapshot.clock_resolution,
+            }
+    elif not options.lock_situation and any("clock: unknown" in str(x) for x in (snapshot.debug_notes or ())):
+        trusted = session.get(LIVE_FEED_TRUSTED_CLOCK)
+        period_now = int(snapshot.quarter) if snapshot.quarter is not None else int(session.get(GAME_PERIOD, 1))
+        used_trusted = False
+        if isinstance(trusted, dict):
+            try:
+                t_period = int(trusted.get("period", -1))
+                t_sec = int(trusted.get("seconds", -1))
+                t_epoch = float(trusted.get("epoch", 0))
+                t_src = str(trusted.get("source") or "")
+            except (TypeError, ValueError):
+                t_period, t_sec, t_epoch, t_src = -1, -1, 0.0, ""
+            if (
+                t_src in ("display_clock", "numeric_status")
+                and t_period == period_now
+                and t_sec >= 0
+                and (float(snapshot.fetched_at_epoch) - t_epoch) <= _TRUSTED_CLOCK_MAX_AGE_SEC
+            ):
+                sec2 = clamp_quarter_clock_seconds(period_now, t_sec)
+                session[GAME_QUARTER_CLOCK_MINS] = sec2 // 60
+                session[GAME_QUARTER_CLOCK_SECS] = sec2 % 60
+                game.clock_seconds_remaining = sec2
+                applied.append("clock_retained_trusted")
+                used_trusted = True
+                debug_notes_extra.append(
+                    "clock: retained from prior trusted ESPN displayClock/numeric reading "
+                    f"(≤{_TRUSTED_CLOCK_MAX_AGE_SEC:.0f}s gap, same period) — confirm vs broadcast."
+                )
+                logger.info(
+                    "Live feed sync: applied trusted clock fallback (%ss left in period, period %s).",
+                    sec2,
+                    period_now,
+                )
+        if not used_trusted:
+            logger.warning(
+                "Live feed sync: clock not updated (unknown in ESPN payload); UI quarter clock may stay at prior values."
+            )
 
     if not options.lock_score:
         if snapshot.our_score is not None:
@@ -212,13 +266,17 @@ def apply_snapshot(
                 eid = str(ev.event_id)
                 if eid in seen:
                     continue
-                fam = _family_from_feed_event(ev)
-                pt = "run" if fam in ("inside_zone", "outside_zone", "power", "draw") else "pass"
+                if ev.type_hint == "kickoff":
+                    fam, pt, rt = "special_teams", "special", "kickoff"
+                else:
+                    fam = _family_from_feed_event(ev)
+                    pt = "run" if fam in ("inside_zone", "outside_zone", "power", "draw") else "pass"
+                    rt = "feed"
                 actual = ActualPlayResult(
                     family=fam,
                     concept_name="Feed",
                     play_type=pt,
-                    result_type="feed",
+                    result_type=rt,
                     yards_gained=int(ev.yards_gained or 0),
                     description=f"[Feed] {ev.summary_text[:220]}",
                 )
@@ -265,7 +323,8 @@ def apply_snapshot(
         "drives_imported": drives_imported,
         "current_drive_plays_merged": current_drive_merged,
         "current_drive_merge_debug": list(current_merge_debug),
-        "debug_notes": list(snapshot.debug_notes),
+        "clock_resolution": snapshot.clock_resolution,
+        "debug_notes": list(snapshot.debug_notes) + debug_notes_extra,
     }
     session[LIVE_FEED_LAST_AUDIT] = audit
     session[LIVE_FEED_LAST_SYNC_EPOCH] = snapshot.fetched_at_epoch

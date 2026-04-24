@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from playcaller.game import Game
@@ -29,6 +30,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_SEEN_PLAY_IDS,
+    LIVE_FEED_TRUSTED_CLOCK,
 )
 from playcaller.streamlit_state.session import (
     clear_coached_team_espn_session_identity,
@@ -76,6 +78,26 @@ def test_http_insecure_ssl_env(monkeypatch) -> None:
     assert http_insecure_ssl_enabled() is True
 
 
+def test_parse_espn_summary_fallback_clock_from_play_text() -> None:
+    p = Path(__file__).resolve().parent / "fixtures" / "espn_summary_no_display_clock.json"
+    with open(p, encoding="utf-8") as f:
+        data = json.load(f)
+    snap = parse_espn_summary(data, sport="nfl", our_team_id="14")
+    assert snap.clock_seconds_in_period == 7 * 60 + 32
+    assert snap.quarter == 3
+    assert any("clock: fallback from play text" in n for n in snap.debug_notes)
+    assert snap.clock_resolution == "play_text"
+
+
+def test_parse_espn_summary_period_inferred_from_detail_when_missing_period_field() -> None:
+    p = Path(__file__).resolve().parent / "fixtures" / "espn_summary_period_from_detail_only.json"
+    with open(p, encoding="utf-8") as f:
+        data = json.load(f)
+    snap = parse_espn_summary(data, sport="nfl", our_team_id="14")
+    assert snap.quarter == 2
+    assert any("period: inferred" in n for n in snap.debug_notes)
+
+
 def test_parse_espn_summary_maps_situation_and_scores() -> None:
     data = _load_fixture()
     snap = parse_espn_summary(data, sport="nfl", our_team_id="14")
@@ -91,6 +113,7 @@ def test_parse_espn_summary_maps_situation_and_scores() -> None:
     assert snap.opponent_score == 14
     assert len(snap.new_plays) == 2
     assert snap.new_plays[0].event_id == "401test001p1"
+    assert snap.clock_resolution == "display_clock"
 
 
 def test_apply_snapshot_updates_session_and_game() -> None:
@@ -146,6 +169,45 @@ def test_apply_snapshot_updates_session_and_game() -> None:
     assert aud0.get("coached_team_id") == "14"
     assert aud0.get("feed_team_scope") == "our"
     assert session.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) == "14"
+    assert isinstance(session.get(LIVE_FEED_TRUSTED_CLOCK), dict)
+    assert session[LIVE_FEED_TRUSTED_CLOCK].get("source") == "display_clock"
+
+
+def test_apply_snapshot_retains_trusted_clock_when_displayclock_drops_briefly() -> None:
+    data = _load_fixture()
+    snap1 = parse_espn_summary(data, sport="nfl", our_team_id="14")
+    game = Game.new_game()
+    session: dict = {
+        LIVE_FEED_SEEN_PLAY_IDS: [],
+    }
+    apply_snapshot(
+        game=game,
+        session=session,
+        drive_log=DriveLogger(),
+        snapshot=snap1,
+        options=SyncOptions(lock_situation=False, lock_score=False),
+    )
+    assert session[GAME_QUARTER_CLOCK_MINS] == 7 and session[GAME_QUARTER_CLOCK_SECS] == 5
+    unknown_note = (
+        "clock: unknown — ESPN omitted displayClock and no (M:SS) prefix on scanned play texts; "
+        "quarter clock not updated this sync."
+    )
+    snap2 = replace(
+        snap1,
+        clock_seconds_in_period=None,
+        clock_resolution=None,
+        debug_notes=(unknown_note,),
+        fetched_at_epoch=snap1.fetched_at_epoch + 15.0,
+    )
+    apply_snapshot(
+        game=game,
+        session=session,
+        drive_log=DriveLogger(),
+        snapshot=snap2,
+        options=SyncOptions(lock_situation=False, lock_score=False),
+    )
+    assert session[GAME_QUARTER_CLOCK_MINS] == 7 and session[GAME_QUARTER_CLOCK_SECS] == 5
+    assert "clock_retained_trusted" in (session.get(LIVE_FEED_LAST_AUDIT) or {}).get("applied", [])
 
 
 def test_feed_play_dedup() -> None:
@@ -319,6 +381,25 @@ def test_apply_snapshot_keeps_persistent_coached_team_when_snapshot_has_no_coach
     )
     assert session.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) == "14"
     assert (session.get(LIVE_FEED_LAST_AUDIT) or {}).get("coached_team_id") == ""
+
+
+def test_fetch_snapshot_includes_raw_summary(monkeypatch) -> None:
+    from playcaller.live_data.espn_football import EspnFootballProvider
+
+    payload = json.loads(
+        (Path(__file__).resolve().parent / "fixtures" / "espn_summary_live_synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def fake_fetch(_url: str):
+        return JsonFetchResult(data=payload)
+
+    monkeypatch.setattr("playcaller.live_data.espn_football.fetch_json", fake_fetch)
+    prov = EspnFootballProvider("nfl")
+    fr = prov.fetch_snapshot("401000001", our_team_id="14")
+    assert fr.ok and fr.snapshot is not None
+    assert fr.raw_summary == payload
 
 
 def test_list_scoreboard_ufl_fetches_ufl_scoreboard(monkeypatch) -> None:

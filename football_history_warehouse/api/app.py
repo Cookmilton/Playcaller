@@ -18,16 +18,17 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 
 from football_history_warehouse.api.deps import get_warehouse_client
+from football_history_warehouse.consumer.inventory_filters import GameInventoryFilters
 from football_history_warehouse.api.schemas import (
     PlaysBySituationRequest,
     SituationOutcomeRequest,
     TeamTendencyRequest,
 )
 from football_history_warehouse.consumer.client import FootballWarehouseClient
-from football_history_warehouse.query.pagination import PageParams
+from football_history_warehouse.query.pagination import MAX_PAGE_LIMIT, PageParams
 
 
 @asynccontextmanager
@@ -52,6 +53,29 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/v1/games/inventory")
+    def get_games_inventory(
+        league_id: str | None = None,
+        season_id: str | None = None,
+        team_id: str | None = None,
+        import_job_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=MAX_PAGE_LIMIT),
+        offset: int = Query(default=0, ge=0),
+        client: FootballWarehouseClient = Depends(get_warehouse_client),
+    ) -> dict[str, Any]:
+        """Paged list of games with counts and import hints (operator review)."""
+        try:
+            page = PageParams(limit=limit, offset=offset)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        filt = GameInventoryFilters(
+            league_id=league_id,
+            season_id=season_id,
+            team_id=team_id,
+            import_job_id=import_job_id,
+        )
+        return client.list_games_inventory(filt, page=page).model_dump(mode="json")
 
     @app.get("/v1/games/{game_id}/review")
     def get_game_review(

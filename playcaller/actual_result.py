@@ -227,6 +227,11 @@ def _analysis_category_and_body(a: ActualPlayResult) -> Tuple[str, str]:
     if rtype == "punt":
         y = int(a.yards_gained)
         return "Punt", f"net {_yards_phrase(y)}" if y else "—"
+    if rtype == "kickoff":
+        y = int(a.yards_gained)
+        return "Kickoff", _yards_phrase(y) if y else "—"
+    if rtype in ("extra_point", "extra_point_miss"):
+        return "Extra point", "good" if rtype == "extra_point" else "missed"
     if rtype == "field_goal":
         return "Field goal", "good"
     if rtype == "field_goal_miss":

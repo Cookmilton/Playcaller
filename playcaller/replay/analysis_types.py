@@ -7,29 +7,39 @@ These objects describe **retroactive** replay only; they are not stored historic
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
 class PreSnapContextRecord:
     """Reconstructed (or overlay) pre-snap situation for one archived play."""
 
-    territory: str
-    yardline: int
-    down: int
-    distance: int
-    quarter: int
-    seconds_remaining: int
+    # Field / down & distance: ``None`` when unknown — never fabricate 1 & 10 or own 25.
+    territory: Optional[str]
+    yardline: Optional[int]
+    down: Optional[int]
+    distance: Optional[int]
+    # Game clock / quarter: prefer ESPN per-play feed; ``None`` when genuinely unknown (never default Q1/15:00).
+    quarter: Optional[int]
+    seconds_remaining: Optional[int]
     score_diff: int
     own_timeouts: int
     opp_timeouts: int
     plays_this_drive_before_snap: int
     reconstruction_anchor: str
     reconstruction_notes: str = ""
-    # Overlay fields copied from live session (approximate for history)
+    # Raw ESPN ``clock.displayValue`` when available (display before formatting ``seconds_remaining``).
+    clock_display: Optional[str] = None
+    home_score_snap: Optional[int] = None
+    away_score_snap: Optional[int] = None
+    snap_provenance: Tuple[Tuple[str, str], ...] = ()
+    # Overlay fields copied from live session (defensive read, weather — not game clock).
     def_personnel: str = ""
     coverage_shell: str = ""
     weather: str = ""
+    goal_to_go: bool = False
+    possession_team_abbrev: str = ""
+    opponent_team_abbrev: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -76,6 +86,8 @@ class ActualVsReplayComparisonRow:
     coarse_bucket_match: Optional[bool] = None
     chain_error: Optional[str] = None
     replay_error: Optional[str] = None
+    # (family, score) pairs from ``recommend()`` scores map at replay time (same semantics as audit ``top_families``).
+    top_family_scores: Tuple[Tuple[str, float], ...] = ()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -97,6 +109,7 @@ class ActualVsReplayComparisonRow:
             "family_match": self.family_match,
             "chain_error": self.chain_error,
             "replay_error": self.replay_error,
+            "top_family_scores": list(self.top_family_scores),
         }
 
 

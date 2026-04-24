@@ -201,6 +201,41 @@ def advance_game_state_after_actual(
             turnover_on_downs=True,
             tags=tags,
         )
+    if rt_act == "kickoff":
+        g = int(actual.yards_gained)
+        yl = min(50, max(1, 25 + max(0, g)))
+        tags = ProgressionTags()
+        return SituationSnapshot(
+            territory="own",
+            yardline=yl,
+            down=1,
+            distance=10,
+            touchdown=False,
+            turnover_on_downs=False,
+            tags=tags,
+        )
+    if rt_act == "punt":
+        tags = ProgressionTags()
+        return SituationSnapshot(
+            territory="own",
+            yardline=25,
+            down=1,
+            distance=10,
+            touchdown=False,
+            turnover_on_downs=True,
+            tags=tags,
+        )
+    if rt_act in ("extra_point", "extra_point_miss"):
+        tags = ProgressionTags()
+        return SituationSnapshot(
+            territory="own",
+            yardline=25,
+            down=1,
+            distance=10,
+            touchdown=False,
+            turnover_on_downs=False,
+            tags=tags,
+        )
 
     net_gain = int(actual.yards_gained)
     if actual.penalty:

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Tuple
 
 from playcaller.domain import ActualPlayResult
 
+from .espn_drive_audit_parse import parse_drive_feed_audit_from_espn_drive_dict
 from .espn_play_normalize import espn_play_to_actual, validate_actual_for_engine
 from .espn_summary_teams import team_label_pair, team_labels_from_espn_summary
 from .types import FeedCompletedDrive
@@ -74,6 +75,7 @@ def extract_completed_drives_from_espn_payload(
         key = _stable_drive_key(event_id, raw, i)
         tid = _drive_team_id(raw)
         abbr, disp = team_label_pair(team_labels, tid)
+        audit = parse_drive_feed_audit_from_espn_drive_dict(raw)
         out.append(
             FeedCompletedDrive(
                 stable_key=key,
@@ -81,6 +83,7 @@ def extract_completed_drives_from_espn_payload(
                 plays=tuple(normalized),
                 team_abbreviation=abbr,
                 team_display_name=disp,
+                feed_audit=audit,
             )
         )
 

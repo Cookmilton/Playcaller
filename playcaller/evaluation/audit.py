@@ -19,6 +19,14 @@ def _top_family_scores(scores: Mapping[str, float], *, n: int = 5) -> List[Dict[
     return [{"family": k, "score": round(float(v), 4)} for k, v in ranked[:n]]
 
 
+def top_family_score_pairs(scores: Mapping[str, float], *, n: int = 6) -> tuple[tuple[str, float], ...]:
+    """Ranked (family, score) pairs from a recommendation ``scores`` map (deterministic)."""
+    if not scores:
+        return ()
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    return tuple((str(k), round(float(v), 4)) for k, v in ranked[:n])
+
+
 def _compact_model_input(mi: Optional[ModelInput]) -> Dict[str, Any]:
     if mi is None:
         return {}

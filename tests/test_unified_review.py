@@ -9,10 +9,14 @@ from playcaller.review.snap_review import SNAP_REVIEW_LOG_EXPORT_KEY
 from playcaller.review.unified_review import (
     ReviewMode,
     ReviewRowFilter,
+    UnifiedComparison,
+    UnifiedReviewRow,
     build_unified_rows_from_audit,
+    compute_quick_insights,
     compute_review_summary_metrics,
     filter_unified_rows,
     group_unified_rows_by_drive,
+    high_confidence_full_agreement_counts,
     resolve_review_mode,
 )
 
@@ -156,3 +160,59 @@ def test_summary_metrics_rates() -> None:
     assert m.total_rows == 2
     assert m.drives_with_rows == 1
     assert m.family_match_rate == 1.0
+
+
+def _ur_row(
+    *,
+    down: int,
+    distance: int,
+    model_rp: str,
+    actual_rp: str,
+    bucket_match: bool | None = True,
+    conf: float | None = 0.8,
+) -> UnifiedReviewRow:
+    pre = {"down": down, "distance": distance, "territory": "own", "yardline": 25}
+    return UnifiedReviewRow(
+        review_mode=ReviewMode.TRUE_STORED,
+        audit_index=0,
+        drive_id=0,
+        play_index_on_drive=1,
+        team_side="our",
+        pre_snap=pre,
+        actual_headline="",
+        actual_detail="",
+        actual_structured={"run_pass": actual_rp},
+        model_headline="",
+        model_subline="",
+        model_structured={"run_pass": model_rp},
+        comparison=UnifiedComparison(True, bucket_match, True),
+        confidence=conf,
+        is_replay=False,
+        is_historical=True,
+    )
+
+
+def test_high_confidence_full_agreement_counts() -> None:
+    rows = [
+        _ur_row(down=1, distance=10, model_rp="Pass", actual_rp="Pass", bucket_match=True, conf=0.9),
+        _ur_row(down=2, distance=7, model_rp="Run", actual_rp="Pass", bucket_match=False, conf=0.7),
+        _ur_row(down=3, distance=3, model_rp="Run", actual_rp="Run", bucket_match=None, conf=0.8),
+    ]
+    agree, tot = high_confidence_full_agreement_counts(rows)
+    assert tot == 2
+    assert agree == 1
+
+
+def test_compute_quick_insights_omits_pass_rate_when_thin_sample() -> None:
+    rows = [
+        _ur_row(down=1, distance=10, model_rp="Pass", actual_rp="Run"),
+        _ur_row(down=1, distance=10, model_rp="Pass", actual_rp="Pass"),
+    ]
+    lines = compute_quick_insights(rows)
+    assert not any("pass rate" in x.lower() for x in lines)
+
+
+def test_compute_quick_insights_includes_pass_rate_with_enough_tags() -> None:
+    rows = [_ur_row(down=1, distance=10, model_rp="Pass", actual_rp="Run") for _ in range(5)]
+    lines = compute_quick_insights(rows)
+    assert any("pass rate" in x.lower() for x in lines)

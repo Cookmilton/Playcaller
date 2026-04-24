@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from playcaller.actual_result import format_actual_play_result_description
 from playcaller.domain import ActualPlayResult, FG_RANGE_YARDLINE
+from playcaller.play_event_segment import PlayEventSegment
 from playcaller.evaluation.audit import situation_bucket
 from playcaller.evaluation.metrics import (
     EXPLOSIVE_GAIN_YARD_THRESHOLD,
@@ -44,6 +45,50 @@ def format_situation_line(pre: Mapping[str, Any]) -> str:
     los = format_scrimmage_line(pre)
     clk = format_clock_line(pre)
     return f"{dn} & {dist} · {los} · {clk}"
+
+
+def _score_diff_phrase(pre: Mapping[str, Any]) -> str:
+    raw = pre.get("score_diff")
+    if raw is None:
+        return ""
+    try:
+        sd = int(raw)
+    except (TypeError, ValueError):
+        return ""
+    if sd > 0:
+        return f" · score: up {sd}"
+    if sd < 0:
+        return f" · score: down {abs(sd)}"
+    return " · score: tied"
+
+
+def format_review_context_line(pre: Mapping[str, Any], segment: PlayEventSegment) -> str:
+    """
+    Film-room context line: honest down & distance only for offensive scrimmage snaps.
+    Special teams uses event-specific phrasing (chain / pre_snap may still reflect approx. field).
+    """
+    if not pre:
+        return ""
+    clk = format_clock_line(pre)
+    los = format_scrimmage_line(pre)
+    score = _score_diff_phrase(pre)
+    field = format_field_position_sentence(pre)
+
+    if segment == PlayEventSegment.KICKOFF:
+        return f"**Kickoff** — not a scrimmage down · {clk}{score} · approx. spot {los}"
+    if segment == PlayEventSegment.PUNT:
+        return f"**Punt** · {clk}{score} · {los}"
+    if segment == PlayEventSegment.FIELD_GOAL:
+        return f"**Field goal attempt** · {clk}{score} · {los}"
+    if segment == PlayEventSegment.PAT:
+        return f"**Extra point** · {clk}{score}"
+    if segment == PlayEventSegment.ADMIN:
+        return f"**Admin / clock** · {clk}{score}"
+    if segment == PlayEventSegment.OTHER_SPECIAL:
+        return f"**Special teams** · {clk}{score} · {los}"
+
+    situ = format_situation_line(pre)
+    return f"{situ}{score} · {field}"
 
 
 def format_field_position_sentence(pre: Mapping[str, Any]) -> str:

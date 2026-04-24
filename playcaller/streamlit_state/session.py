@@ -31,6 +31,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_POSSESSION_TEAM_ID,
     LIVE_FEED_HTTP_INSECURE_WARNING,
     LIVE_FEED_LAST_SYNC_EPOCH,
+    LIVE_FEED_TRUSTED_CLOCK,
     LIVE_FEED_MANUAL_AUTO_FETCH,
     LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR,
     LIVE_FEED_MANUAL_EVENT_FETCH_ERROR,
@@ -131,6 +132,8 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
         ss["last_play_summary"] = ""
     if "ui_debug_game_context" not in ss:
         ss["ui_debug_game_context"] = False
+    if "sidebar_custom_snap_presets_v1" not in ss:
+        ss["sidebar_custom_snap_presets_v1"] = []
     if UI_HISTORICAL_NUDGE_ENABLED not in ss:
         ss[UI_HISTORICAL_NUDGE_ENABLED] = bool(hist_settings.nudge_default_on)
     if UI_WAREHOUSE_ADVISORY_ENABLED not in ss:
@@ -212,6 +215,7 @@ def clear_live_feed_session_keys(ss: MutableMapping[str, Any]) -> None:
     ss.pop(LIVE_FEED_LAST_AUDIT, None)
     ss.pop(LIVE_FEED_LAST_ERROR, None)
     ss.pop(LIVE_FEED_LAST_SYNC_EPOCH, None)
+    ss.pop(LIVE_FEED_TRUSTED_CLOCK, None)
     ss.pop(LIVE_FEED_HTTP_INSECURE_WARNING, None)
     ss[LIVE_FEED_MANUAL_EVENT_TEAMS] = None
     ss[LIVE_FEED_MANUAL_EVENT_FOR_ID] = ""

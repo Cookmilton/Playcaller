@@ -8,6 +8,8 @@ on-field facts, not storage layout.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from football_history_warehouse.domain.competition import Play
@@ -27,6 +29,46 @@ class PlaysBySituationPage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     plays: tuple[Play, ...]
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class WarehouseGameInventoryItem(BaseModel):
+    """
+    One row in the operator inventory: enough to pick a game and audit import provenance.
+
+    Counts are warehouse facts; ``source_artifact_hint`` is a best-effort label (file name, URI, or ingest URI).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    game_id: str
+    league_id: str
+    league_name: str
+    season_id: str
+    season_year_label: str
+    scheduled_start_utc: datetime | None = None
+    status: str
+    home_team_id: str
+    away_team_id: str
+    home_team_name: str
+    away_team_name: str
+    home_score_final: int | None = None
+    away_score_final: int | None = None
+    drive_count: int
+    play_count: int
+    import_job_id: str | None = None
+    imported_at: datetime | None = None
+    source_artifact_hint: str | None = None
+
+
+class GameInventoryPage(BaseModel):
+    """Paged inventory list (offset/limit, ``has_more`` probe)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    games: tuple[WarehouseGameInventoryItem, ...]
     limit: int
     offset: int
     has_more: bool

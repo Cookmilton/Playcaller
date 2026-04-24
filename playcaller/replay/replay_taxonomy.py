@@ -98,6 +98,10 @@ def actual_play_summary_bucket(actual: ActualPlayResult) -> str:
 
     if actual.penalty:
         return "penalty / no-play" if rtype in ("no_play", "no play") else "penalty"
+    if rtype == "kickoff":
+        return "kickoff"
+    if rtype in ("extra_point", "extra_point_miss"):
+        return "extra point"
     if rtype == "punt" or fam == "punt":
         return "punt"
     if rtype == "field_goal":

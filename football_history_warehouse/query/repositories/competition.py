@@ -8,12 +8,23 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from football_history_warehouse.query.situation.filter import PlaySituationFilter, validate_situation_has_scope
 from football_history_warehouse.query.situation.sql import apply_play_situation_filter
 from football_history_warehouse.storage.database.models import DriveRow, GameRow, PlayRow
+
+
+def _game_schedule_order_by():
+    """
+    Paginated game lists: ascending by schedule, unknown schedules last.
+
+    Avoids ``NULLS LAST`` so older SQLite builds work; matches Postgres
+    ``scheduled_start_utc ASC NULLS LAST, game_id ASC``.
+    """
+    sched_null_group = case((GameRow.scheduled_start_utc.is_(None), 1), else_=0)
+    return sched_null_group.asc(), GameRow.scheduled_start_utc.asc(), GameRow.game_id.asc()
 
 
 class CompetitionQueryRepository:
@@ -46,10 +57,7 @@ class CompetitionQueryRepository:
             stmt = stmt.where(GameRow.season_id == season_id)
         if team_id is not None:
             stmt = stmt.where(or_(GameRow.home_team_id == team_id, GameRow.away_team_id == team_id))
-        stmt = stmt.order_by(
-            GameRow.scheduled_start_utc.asc().nulls_last(),
-            GameRow.game_id.asc(),
-        ).limit(limit + 1).offset(offset)
+        stmt = stmt.order_by(*_game_schedule_order_by()).limit(limit + 1).offset(offset)
         rows = list(self._session.scalars(stmt).all())
         has_more = len(rows) > limit
         return rows[:limit], has_more

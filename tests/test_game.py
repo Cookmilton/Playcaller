@@ -163,3 +163,4 @@ def test_game_json_roundtrip() -> None:
     assert g2.drives[0].possessing_team == "offense"
     assert g2.drives[0].plays[0].family == "quick_game"
     assert g2.quarter == 3
+    assert g2.drives[0].feed_audit is None

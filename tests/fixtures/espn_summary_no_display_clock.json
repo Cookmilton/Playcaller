@@ -1,0 +1,56 @@
+{
+  "header": {
+    "competitions": [
+      {
+        "id": "401test002",
+        "competitors": [
+          {
+            "id": "10",
+            "homeAway": "home",
+            "score": "14",
+            "timeouts": 2,
+            "team": {
+              "id": "10",
+              "abbreviation": "NYG",
+              "displayName": "New York Giants"
+            }
+          },
+          {
+            "id": "14",
+            "homeAway": "away",
+            "score": "10",
+            "timeouts": 3,
+            "team": {
+              "id": "14",
+              "abbreviation": "LAR",
+              "displayName": "Los Angeles Rams"
+            }
+          }
+        ],
+        "status": {
+          "period": 3,
+          "type": {"completed": false, "detail": "3rd Quarter"}
+        },
+        "situation": {
+          "down": 2,
+          "distance": 7,
+          "yardsToEndzone": 42,
+          "possession": "14"
+        }
+      }
+    ]
+  },
+  "drives": {
+    "previous": [],
+    "current": {
+      "plays": [
+        {
+          "id": "401test002p9",
+          "type": {"text": "Rush", "id": "5"},
+          "text": "(7:32) - 6 Yd Rush",
+          "statYardage": 6
+        }
+      ]
+    }
+  }
+}
