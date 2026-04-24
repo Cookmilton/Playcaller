@@ -169,6 +169,11 @@ def _check_quarter_progression(plays: list[Play], issues: list[ValidationIssue])
             )
 
 
+def _equal_clock_budget(quarter: int) -> int:
+    """How many same-second transitions to allow before warning (Q4 stacks: replay / feed)."""
+    return 12 if quarter == 4 else 4
+
+
 def _check_clock_monotonic(plays: list[Play], issues: list[ValidationIssue]) -> None:
     equal_budget = 1
     prev_clock: int | None = None
@@ -177,6 +182,8 @@ def _check_clock_monotonic(plays: list[Play], issues: list[ValidationIssue]) -> 
         if p.clock_seconds is None:
             continue
         if "timeout" in (p.raw_description or "").lower():
+            continue
+        if p.play_type == PlayType.KICKOFF:
             continue
         if prev_q is not None and p.quarter == prev_q and prev_clock is not None:
             if p.clock_seconds > prev_clock:
@@ -205,11 +212,16 @@ def _check_clock_monotonic(plays: list[Play], issues: list[ValidationIssue]) -> 
                 else:
                     equal_budget -= 1
         if prev_q is None or p.quarter != prev_q:
-            equal_budget = 4
+            equal_budget = _equal_clock_budget(p.quarter)
         elif p.play_type == PlayType.PENALTY_NO_PLAY or p.play_result == PlayResult.NO_PLAY:
-            equal_budget = 4
+            equal_budget = _equal_clock_budget(p.quarter)
         prev_q = p.quarter
         prev_clock = p.clock_seconds
+        # nflverse often appends straggler rows after END QUARTER / END GAME with a non-zero clock;
+        # comparing those to the synthetic 0s marker is feed-order noise, not a live-clock reversal.
+        if _end_of_half(p) or _end_of_game(p):
+            prev_clock = None
+            equal_budget = _equal_clock_budget(p.quarter)
 
 
 def _check_down_reset_on_first_down(plays: list[Play], issues: list[ValidationIssue]) -> None:
@@ -277,7 +289,8 @@ def _end_of_half(p: Play) -> bool:
 
 
 def _end_of_game(p: Play) -> bool:
-    return "END OF GAME" in p.raw_description.upper()
+    d = p.raw_description.upper()
+    return "END OF GAME" in d or "END GAME" in d
 
 
 def _turnover_on_downs(p: Play) -> bool:
