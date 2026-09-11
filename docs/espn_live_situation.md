@@ -20,7 +20,7 @@ Seen-play-id reset keys on **`drives.current.id`**, never on scoreboard possessi
 - Working set: `prepare_seen_play_ids_for_feed` in `playcaller/live_data/espn_current_drive_merge.py`
 - Snapshot field: `EspnLiveSnapshot.current_feed_drive_id`
 - Session key: `live_feed_last_current_drive_id` (`LIVE_FEED_LAST_CURRENT_DRIVE_ID`)
-- Toggle: `SyncOptions.reset_seen_play_ids_on_possession_change` — the name is historical; the flag now controls a **drive-id** reset, not board possession.
+- Toggle: `SyncOptions.reset_seen_play_ids_on_feed_drive_id_change` — seen-play-id reset keys on ESPN `drives.current.id`, not board possession.
 
 Board possession can still disagree with `drives.current` for one snap at change of possession. Drive-id keying removed the duplicate-merge consequence of that disagreement; it did not remove the disagreement.
 

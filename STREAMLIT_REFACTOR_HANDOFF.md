@@ -86,7 +86,6 @@ Possession control: three chips (**Not set** | **Our team** | **Opponent**) via 
 - **History pipeline:** extend the same `snap_review_log` / `recommendation_audit` wording to any remaining operator-facing ingest or loader copy.
 - **Feed semantics:** align sidebar/ingest documentation for `only_append_when_our_possession` vs current-drive merge and team scope (`LIVE_FEED_TEAM_SCOPE`).
 - **Predictor vs board:** `heuristic_predictor` still clamps distance to 1–25; a honest board distance above 25 ranks as 25.
-- **`SyncOptions.reset_seen_play_ids_on_possession_change`:** public field name is historical; consider a rename once call sites can move together.
 - **`Drive.possessing_team`:** still normalizes `None` → `"offense"` in `_norm_possessing_team` while `Game.possession` is optional. It is now unreachable from the UI (End drive is blocked while possession is unset) and logs a warning when it fires, so this is a cleanup, not a correctness gap. Making it optional touches the reconciler, drive display, audit report, and export schema — do it as its own phase.
 
 ## Validation
