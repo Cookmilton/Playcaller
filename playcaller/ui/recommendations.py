@@ -217,7 +217,12 @@ def render_recommendation_panel(
     with left:
         st.markdown("**Field position**")
         display_ctx = ctx
-        st.markdown(render_field(display_ctx), unsafe_allow_html=True)
+        st.markdown(
+            render_field(display_ctx, show_spot=honesty.field_position.synced),
+            unsafe_allow_html=True,
+        )
+        if not honesty.field_position.synced:
+            st.caption("not synced")
         if result:
             bkt = result["bucket"].replace("_"," ").title()
             cov = result["ctx"].coverage_shell.replace("_"," ").upper() if result["ctx"].coverage_shell!="unknown" else "Coverage unknown"
