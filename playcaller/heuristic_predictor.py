@@ -19,6 +19,7 @@ from .history.records import NormalizedHistoricalPlay
 from .library import PLAY_LIBRARY
 from .model_types import ModelOutput
 from .play_metadata import play_selection_weight
+from .play_rationale import situation_aware_why
 from .predictors.base import Predictor
 from .state import DriveLogger
 
@@ -936,7 +937,8 @@ class HeuristicPredictor(Predictor):
         rng = random.Random(self._stable_seed(ctx_n, drive_log, model_input))
 
         if ctx_n.game_mode == "two_point":
-            play = self.choose_play("two_point", ctx_n, rng, model_input)
+            play = dict(self.choose_play("two_point", ctx_n, rng, model_input))
+            play["why"] = situation_aware_why(play.get("why"), ctx_n)
             return ModelOutput(
                 play_family="two_point",
                 play=play,
@@ -970,7 +972,8 @@ class HeuristicPredictor(Predictor):
             hist_debug = {"applied": False, "reason": "no_corpus_for_call"}
         hist_debug["corpus_supplied"] = plays_eff is not None
         family = self.choose_family(ctx_n, bucket, scores=scores)
-        play = self.choose_play(family, ctx_n, rng, model_input)
+        play = dict(self.choose_play(family, ctx_n, rng, model_input))
+        play["why"] = situation_aware_why(play.get("why"), ctx_n)
 
         return ModelOutput(
             play_family=family,
