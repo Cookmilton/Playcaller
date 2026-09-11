@@ -1,25 +1,28 @@
-"""Local-time formatting for live-sync captions (no Streamlit)."""
+"""Streamlit viewer timezone → :mod:`playcaller.local_time` (1.56 ``st.context.timezone``)."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import Optional
+
+from playcaller.local_time import format_local_epoch_labeled, format_synced_hhmm
 
 
-def local_datetime_from_epoch(epoch: float) -> datetime:
-    return datetime.fromtimestamp(float(epoch)).astimezone()
+def viewer_timezone_name() -> Optional[str]:
+    """Browser IANA zone from Streamlit 1.56 ``st.context.timezone``, else None."""
+    try:
+        import streamlit as st
+
+        ctx = getattr(st, "context", None)
+        tz = getattr(ctx, "timezone", None) if ctx is not None else None
+    except Exception:
+        return None
+    name = str(tz or "").strip()
+    return name or None
 
 
-def format_synced_hhmm(epoch: float) -> str:
-    """Sidebar line: ``HH:MM TZ`` in the operator's local zone."""
-    dt = local_datetime_from_epoch(epoch)
-    tz = str(dt.tzname() or "").strip()
-    clock = dt.strftime("%H:%M")
-    return f"{clock} {tz}".strip() if tz else clock
+def format_synced_hhmm_viewer(epoch: float) -> str:
+    return format_synced_hhmm(epoch, timezone_name=viewer_timezone_name())
 
 
-def format_local_epoch_labeled(epoch: float) -> str:
-    """``Live data:`` stamp with timezone abbreviation."""
-    dt = local_datetime_from_epoch(epoch)
-    tz = str(dt.tzname() or "").strip()
-    stamp = dt.strftime("%Y-%m-%d %H:%M:%S")
-    return f"{stamp} {tz}".strip() if tz else stamp
+def format_local_epoch_labeled_viewer(epoch: float) -> str:
+    return format_local_epoch_labeled(epoch, timezone_name=viewer_timezone_name())

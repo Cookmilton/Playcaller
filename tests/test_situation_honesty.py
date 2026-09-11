@@ -7,7 +7,7 @@ from playcaller.streamlit_state.widget_backend_bridge import (
     GAME_DISTANCE_MIN,
     distance_in_widget_domain,
 )
-from playcaller.ui.local_time import format_local_epoch_labeled, format_synced_hhmm
+from playcaller.local_time import format_local_epoch_labeled, format_synced_hhmm
 from playcaller.ui.situation_honesty import (
     GENERATE_OPPONENT_REASON,
     NOT_SYNCED_TEXT,
@@ -181,11 +181,25 @@ def test_honesty_from_session_reads_audit() -> None:
 def test_local_time_labels_include_timezone() -> None:
     stamp = format_local_epoch_labeled(1_700_000_000.0)
     hhmm = format_synced_hhmm(1_700_000_000.0)
+    assert stamp.endswith("UTC")
+    assert hhmm.endswith("UTC")
     assert ":" in hhmm
-    parts = hhmm.split()
-    assert len(parts) >= 2
-    assert stamp.split()[-1] == parts[-1]
     assert "-" in stamp
+
+
+def test_local_time_uses_named_zone_not_server_local() -> None:
+    stamp = format_local_epoch_labeled(1_700_000_000.0, timezone_name="America/New_York")
+    hhmm = format_synced_hhmm(1_700_000_000.0, timezone_name="America/New_York")
+    assert not stamp.endswith("UTC")
+    assert "2023-" in stamp
+    assert ":" in hhmm
+
+
+def test_streamlit_context_exposes_timezone() -> None:
+    import streamlit as st
+
+    assert hasattr(st, "context")
+    assert hasattr(st.context, "timezone")
 
 
 def test_defense_look_chip_is_preset_or_manual_never_espn() -> None:

@@ -129,7 +129,7 @@ from playcaller.ui.product_copy import (
     SIDEBAR_SECTION_REVIEW_EXPORT,
     SIDEBAR_SECTION_REVIEW_EXPORT_EXPANDER,
 )
-from playcaller.ui.local_time import format_synced_hhmm
+from playcaller.ui.local_time import format_synced_hhmm_viewer
 from playcaller.ui.situation_honesty import leftover_feed_drive_caption
 from playcaller.ui.sidebar_presets import (
     builtin_opp35_active,
@@ -619,7 +619,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             ts = st.session_state.get(LIVE_FEED_LAST_SYNC_EPOCH)
             if ts:
                 origin = str(st.session_state.get(LIVE_FEED_LAST_ORIGIN, "—"))
-                line = f"Synced **{format_synced_hhmm(float(ts))}** · {origin}"
+                line = f"Synced **{format_synced_hhmm_viewer(float(ts))}** · {origin}"
                 st.caption(line)
             aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
             leftover = leftover_feed_drive_caption(aud)
