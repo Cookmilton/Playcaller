@@ -41,8 +41,12 @@ def fmt_clock(seconds_remaining: int) -> str:
     return f"{seconds_remaining // 60}:{seconds_remaining % 60:02d}"
 
 
-def render_field(ctx: GameContext) -> str:
-    """Returns an inline SVG for the current field position."""
+def render_field(ctx: GameContext, *, show_spot: bool = True) -> str:
+    """Returns an inline SVG for the current field position.
+
+    When ``show_spot`` is False the yard lines remain but the ball / sticks marker
+    is omitted (field position is not a live feed value).
+    """
     ypx, ez, w, h = 5.2, 44, 624, 86
     fl, fr = ez, w - ez
     bx = fl + ctx.yardline * ypx if ctx.territory == "own" else fr - ctx.yardline * ypx
@@ -80,9 +84,21 @@ def render_field(ctx: GameContext) -> str:
         f'<rect x="{rz_l + 3}" y="3" width="32" height="10" rx="2" fill="rgba(220,38,38,0.35)"/>'
         f'<text x="{rz_l + 19}" y="10.5" fill="#fca5a5" font-size="6.5" text-anchor="middle" '
         f'font-family="monospace">RED ZONE</text>'
-        if ctx.territory == "opponents" and ctx.yardline <= 20
+        if show_spot and ctx.territory == "opponents" and ctx.yardline <= 20
         else ""
     )
+    marker = ""
+    if show_spot:
+        marker = (
+            f'<line x1="{fdx}" y1="0" x2="{fdx}" y2="{h}" stroke="#f5c518" stroke-width="1.5" '
+            f'stroke-dasharray="4 3" opacity="0.65"/>'
+            f'<line x1="{bx}" y1="4" x2="{bx}" y2="{h - 4}" stroke="#f5c518" stroke-width="2.5"/>'
+            f'<ellipse cx="{bx}" cy="{h / 2}" rx="6" ry="3.8" fill="#c47e3a" stroke="#e09050" '
+            f'stroke-width="0.5" transform="rotate(-20 {bx} {h / 2})"/>'
+            f'<rect x="{bx - 14}" y="4" width="28" height="12" rx="2" fill="rgba(0,0,0,0.8)"/>'
+            f'<text x="{bx}" y="13" fill="#f5c518" font-size="8" text-anchor="middle" '
+            f'font-family="monospace">{ctx.down}&amp;{ctx.distance}</text>'
+        )
 
     return f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;display:block;border-radius:6px;border:1px solid #1e2836">
@@ -95,11 +111,7 @@ def render_field(ctx: GameContext) -> str:
   {ylines}{hashes}{ydlbls}
   <text x="{ez / 2}" y="{h / 2 + 3}" fill="rgba(255,255,255,0.22)" font-size="7" text-anchor="middle" font-family="monospace">OWN</text>
   <text x="{w - ez / 2}" y="{h / 2 + 3}" fill="rgba(255,255,255,0.22)" font-size="7" text-anchor="middle" font-family="monospace">OPP</text>
-  <line x1="{fdx}" y1="0" x2="{fdx}" y2="{h}" stroke="#f5c518" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
-  <line x1="{bx}" y1="4" x2="{bx}" y2="{h - 4}" stroke="#f5c518" stroke-width="2.5"/>
-  <ellipse cx="{bx}" cy="{h / 2}" rx="6" ry="3.8" fill="#c47e3a" stroke="#e09050" stroke-width="0.5" transform="rotate(-20 {bx} {h / 2})"/>
-  <rect x="{bx - 14}" y="4" width="28" height="12" rx="2" fill="rgba(0,0,0,0.8)"/>
-  <text x="{bx}" y="13" fill="#f5c518" font-size="8" text-anchor="middle" font-family="monospace">{ctx.down}&amp;{ctx.distance}</text>
+  {marker}
   {rz}
 </svg>"""
 
