@@ -103,3 +103,32 @@ def test_apply_pending_session_setup_hydrate_clears_team_name():
     apply_all_pending(ss)
     assert ss[SESSION_SETUP_TEAM_NAME] == ""
     assert PENDING_SESSION_SETUP_HYDRATE not in ss
+
+
+def test_pending_session_game_date_fills_empty_widget_only():
+    from playcaller.streamlit_state.keys import PENDING_SESSION_GAME_DATE, SESSION_SETUP_GAME_DATE
+    from playcaller.streamlit_state.pending import apply_all_pending
+
+    ss: dict = {SESSION_SETUP_GAME_DATE: "", PENDING_SESSION_GAME_DATE: "2026-09-11"}
+    apply_all_pending(ss)
+    assert ss[SESSION_SETUP_GAME_DATE] == "2026-09-11"
+    assert PENDING_SESSION_GAME_DATE not in ss
+
+    ss2: dict = {SESSION_SETUP_GAME_DATE: "2018-01-01", PENDING_SESSION_GAME_DATE: "2026-09-11"}
+    apply_all_pending(ss2)
+    assert ss2[SESSION_SETUP_GAME_DATE] == "2018-01-01"
+
+
+def test_pending_scoreboard_status_refreshes_row_detail():
+    from playcaller.streamlit_state.keys import LIVE_FEED_SCOREBOARD_ROWS, PENDING_SCOREBOARD_STATUS
+    from playcaller.streamlit_state.pending import apply_all_pending
+
+    ss: dict = {
+        LIVE_FEED_SCOREBOARD_ROWS: [
+            {"id": "401872657", "detail": "Scheduled", "home_abbr": "LAR", "away_abbr": "SF"}
+        ],
+        PENDING_SCOREBOARD_STATUS: {"event_id": "401872657", "detail": "1st Quarter 8:12"},
+    }
+    apply_all_pending(ss)
+    assert ss[LIVE_FEED_SCOREBOARD_ROWS][0]["detail"] == "1st Quarter 8:12"
+    assert PENDING_SCOREBOARD_STATUS not in ss
