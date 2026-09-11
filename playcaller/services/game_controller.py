@@ -33,7 +33,7 @@ from playcaller.game import DRIVE_END_UI_AUTO
 from playcaller.history.repository_corpus import load_repository_plays
 from playcaller.history.repository_paths import resolve_history_repository_root
 from playcaller.history.repository_settings import load_history_repository_settings
-from playcaller.live_data.drive_boundaries import sort_game_drives_by_feed_sequence
+from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN, sort_game_drives_by_feed_sequence
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     HV_CORPUS_SOURCE,
@@ -42,6 +42,7 @@ from playcaller.streamlit_state.keys import (
     HV_REPO_USE_ALL_GAMES,
     HV_SESSION_CORPUS_KEY,
     LAST_DRIVE_SNAP_CONTEXT,
+    LIVE_FEED_LAST_AUDIT,
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_RERUN_AFTER_WIDGETS,
@@ -129,6 +130,10 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
     st.session_state.last_play_summary = ""
     clear_in_progress_log_state(st.session_state)
+    aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
+    if isinstance(aud, dict):
+        skipped = [s for s in (aud.get("skipped") or []) if s != PREVIOUS_FEED_DRIVE_OPEN]
+        st.session_state[LIVE_FEED_LAST_AUDIT] = {**aud, "skipped": skipped}
     st.session_state.eval_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0)) + 1
 
 
