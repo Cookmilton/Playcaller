@@ -334,8 +334,15 @@ def normalize_game(game_payload: dict[str, Any]) -> tuple[Game, list[Play]]:
                 play_sequence=seq,
                 quarter=q,
                 clock_seconds=_int_or_none(row.get("quarter_seconds_remaining")),
-                possession_team=_team_abbr_or_none(row.get("posteam")),
+                scoring_possession_team=_team_abbr_or_none(row.get("posteam")),
+                display_possession_team=_team_abbr_or_none(row.get("posteam")),
+                posteam_source=(
+                    "feed" if _team_abbr_or_none(row.get("posteam")) else "missing"
+                ),
                 defense_team=_team_abbr_or_none(row.get("defteam")),
+                defteam_source=(
+                    "feed" if _team_abbr_or_none(row.get("defteam")) else "missing"
+                ),
                 down=_int_or_none(row.get("down")),
                 distance=_int_or_none(row.get("ydstogo")),
                 yardline_100=_int_or_none(row.get("yardline_100")),

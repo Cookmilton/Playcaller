@@ -104,8 +104,15 @@ class Play:
     turnover: bool
     raw_description: str
     clock_seconds: Optional[int] = None
-    possession_team: Optional[str] = None
+    # Feed only — never written by posteam inference. JSON field remains ``possession_team`` on load.
+    scoring_possession_team: Optional[str] = None
+    # Best-effort for UI: feed if present, else inference. Never used by implied scoring.
+    display_possession_team: Optional[str] = None
     defense_team: Optional[str] = None
+    # "feed" | "missing" | warehouse inference tags (aligns with ``warehouse.posteam_inference``)
+    posteam_source: Optional[str] = None
+    # "feed" | "missing" for defense abbr; used for safety scoring guard.
+    defteam_source: Optional[str] = None
     down: Optional[int] = None
     distance: Optional[int] = None
     yardline_100: Optional[int] = None

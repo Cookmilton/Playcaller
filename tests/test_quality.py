@@ -38,8 +38,11 @@ def test_unexplained_score_jump_and_yardline_out_of_range_fire_once_each() -> No
         down=1,
         distance=10,
         yardline_100=50,
-        possession_team="BUF",
+        scoring_possession_team="BUF",
+        display_possession_team="BUF",
+        posteam_source="feed",
         defense_team="KC",
+        defteam_source="feed",
     )
     p2 = Play(
         id="p2",
@@ -58,8 +61,11 @@ def test_unexplained_score_jump_and_yardline_out_of_range_fire_once_each() -> No
         down=1,
         distance=10,
         yardline_100=50,
-        possession_team="BUF",
+        scoring_possession_team="BUF",
+        display_possession_team="BUF",
+        posteam_source="feed",
         defense_team="KC",
+        defteam_source="feed",
     )
     p2.yardline_100 = 101
 

@@ -62,6 +62,15 @@ from playcaller.services.game_controller import request_rerun_after_widgets
 from playcaller.streamlit_state.session import coached_team_espn_id_for_previous_drives
 from playcaller.ui.format_play_context import format_play_context
 from playcaller.ui.previous_drives_render import render_drive_score_ribbon, render_score_reconciliation_strip
+from playcaller.ui.review_session_ux import (
+    is_warehouse_historical,
+    play_display_line_for_warehouse,
+    render_compact_game_flow,
+    render_score_confidence_panel,
+    render_summary_header,
+    render_top_insights,
+    render_warehouse_score_ribbon,
+)
 FILM_ROOM_FOCUS_DRIVE = "review_film_room_focus_drive_idx"
 FILM_ROOM_FOCUS_PLAY = "review_film_room_focus_play_tuple"  # (drive_id, play_index_on_drive)
 
@@ -154,10 +163,13 @@ def render_review_sidebar_controls() -> Tuple[ReviewRowFilter, bool, bool]:
         key="review_film_play_rp_filter",
     )
     play_rp = _rp_opts[int(play_rp)]
+    _poss_lbl = {"our": "Our team", "opponent": "Opponent", "both": "Both"}
+    if str(st.session_state.get("wh_review_ux_label_mode") or "") == "home_away":
+        _poss_lbl = {"our": "Home possession", "opponent": "Away possession", "both": "Both"}
     team = st.sidebar.radio(
         "Possession filter",
         options=[PREVIOUS_DRIVES_FILTER_BOTH, PREVIOUS_DRIVES_FILTER_OUR, PREVIOUS_DRIVES_FILTER_OPPONENT],
-        format_func=lambda m: {"our": "Our team", "opponent": "Opponent", "both": "Both"}.get(str(m), str(m)),
+        format_func=lambda m: _poss_lbl.get(str(m), str(m)),
         key="review_film_team_scope",
     )
     _seg_opts = [s.value for s in PlayEventSegment]
@@ -391,7 +403,12 @@ def _drive_header(
     res = dr.result
     suffix = ""
     if res:
-        suffix = f" · {res.headline}"
+        if st.session_state.get("wh_review_ux_play_compact") and dr is not None:
+            from playcaller.ui.review_session_ux import compact_drive_label
+
+            suffix = f" · {compact_drive_label(dr)}"
+        else:
+            suffix = f" · {res.headline}"
     plays = getattr(dr, "plays", None) or []
     nplays = len(plays)
     net_yards = sum(int(getattr(p, "yards_gained", 0) or 0) for p in plays)
@@ -434,10 +451,16 @@ def _render_drive_grade_detail(grade: DriveGrade) -> None:
         )
 
 
-def _film_room_actual_model_html(row: UnifiedReviewRow) -> str:
+def _film_room_actual_model_html(row: UnifiedReviewRow, game: Game) -> str:
     """Separate actual (primary) from model (muted) — no mixed phrasing on one line."""
     if row.event_segment != PlayEventSegment.OFFENSE:
-        a = html.escape(format_actual_comparison_line(row))
+        a = html.escape(
+            play_display_line_for_warehouse(
+                game, row.drive_id, row.play_index_on_drive, format_actual_comparison_line(row)
+            )
+            if st.session_state.get("wh_review_ux_play_compact")
+            else format_actual_comparison_line(row)
+        )
         return (
             f'<div style="margin-top:6px">'
             f'<p style="margin:0;color:#f8fafc">Actual: {a}</p>'
@@ -445,7 +468,14 @@ def _film_room_actual_model_html(row: UnifiedReviewRow) -> str:
             f'<p style="margin:4px 0 0 0;color:#64748b;font-size:12px"><em>No offensive model comparison for this snap.</em></p>'
             f"</div>"
         )
-    actual = html.escape(format_actual_comparison_line(row))
+    al = (
+        play_display_line_for_warehouse(
+            game, row.drive_id, row.play_index_on_drive, format_actual_comparison_line(row)
+        )
+        if st.session_state.get("wh_review_ux_play_compact")
+        else format_actual_comparison_line(row)
+    )
+    actual = html.escape(al)
     lines, _, phrase = build_model_ranked_family_lines(row)
     if not lines:
         model_block = (
@@ -528,7 +558,7 @@ def _render_play_card(
         st.caption(
             "_Stored model line is an **offensive** recommendation — not scored against special teams outcomes._"
         )
-    st.markdown(_film_room_actual_model_html(row), unsafe_allow_html=True)
+    st.markdown(_film_room_actual_model_html(row, game), unsafe_allow_html=True)
     if row.event_segment == PlayEventSegment.OFFENSE:
         lines_all, _, _ = build_model_ranked_family_lines(row)
         if len(lines_all) > 3:
@@ -585,19 +615,34 @@ def render_film_room(
     mistake_ids = {m.play_id for m in session_top_mistakes}
 
     audit_report = compute_drive_audit(game)
-    st.markdown("### Score ribbon")
-    render_drive_score_ribbon(audit_report)
-    render_score_reconciliation_strip(game, audit_report)
+    is_wh = is_warehouse_historical(mode)
+    if is_wh:
+        render_summary_header(game, audit_report, mode=mode)
+        st.divider()
+    st.markdown("### Score ribbon" if not is_wh else "### Score & progression")
+    if is_wh:
+        render_score_confidence_panel(game, audit_report, mode=mode)
+        render_warehouse_score_ribbon(audit_report, game, mode=mode)
+    else:
+        render_drive_score_ribbon(audit_report)
+        render_score_reconciliation_strip(game, audit_report)
     st.divider()
 
     render_mode_banner(mode)
     st.divider()
 
+    if is_wh:
+        render_top_insights(game, mode=mode)
+        st.divider()
+
     render_game_story_section(game, rows)
     st.divider()
     render_patterns_section(game, rows)
     st.divider()
-    render_game_flow_section(game)
+    if is_wh:
+        render_compact_game_flow(game, mode=mode, our_coached_espn_id=our_id)
+    else:
+        render_game_flow_section(game)
     st.divider()
     render_top_mistakes_section(session_top_mistakes)
     st.divider()

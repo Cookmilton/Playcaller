@@ -112,8 +112,19 @@ def _parse_play(d: dict[str, Any]) -> Play:
         turnover=bool(d.get("turnover", False)),
         raw_description=str(d.get("raw_description", "") or ""),
         clock_seconds=_opt_int(d.get("clock_seconds")),
-        possession_team=d.get("possession_team"),
+        scoring_possession_team=d.get("possession_team"),
+        display_possession_team=d.get("possession_team"),
+        posteam_source=(
+            "feed"
+            if d.get("possession_team") is not None and str(d.get("possession_team") or "").strip()
+            else "missing"
+        ),
         defense_team=d.get("defense_team"),
+        defteam_source=(
+            "feed"
+            if d.get("defense_team") is not None and str(d.get("defense_team") or "").strip()
+            else "missing"
+        ),
         down=_opt_int(d.get("down")),
         distance=_opt_int(d.get("distance")),
         yardline_100=_opt_int(d.get("yardline_100")),
@@ -173,7 +184,7 @@ def _load_bundle(game_ref: str) -> tuple[Game, list[Play], list[DerivedPlayFeatu
 
 
 def _away_home_tuple(play: Play, game: Game) -> tuple[int, int]:
-    po = play.possession_team
+    po = play.scoring_possession_team
     if po == game.home_team:
         return int(play.score_defense), int(play.score_offense)
     if po == game.away_team:
@@ -210,7 +221,7 @@ def _format_play_row(p: Play) -> str:
         f"{(str(p.down) if p.down is not None else '-'):>4}  "
         f"{(str(p.distance) if p.distance is not None else '-'):>4}  "
         f"{(str(p.yardline_100) if p.yardline_100 is not None else '-'):>3}  "
-        f"{(p.possession_team or '-'):>4}  "
+        f"{(p.display_possession_team or '-'):>4}  "
         f"{desc}"
     )
 

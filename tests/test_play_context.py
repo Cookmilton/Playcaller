@@ -88,6 +88,9 @@ def test_situation_espn_beats_chain() -> None:
         feed_presnap_territory="opponents",
         feed_presnap_yardline=42,
         feed_possession_team_abbr="GB",
+        display_possession_team_abbr="GB",
+        posteam_source="feed",
+        defteam_source="feed",
         feed_home_score=7,
         feed_away_score=3,
     )

@@ -125,8 +125,11 @@ def test_quality_possession_kickoff_explained() -> None:
         play_sequence=50,
         play_type=PlayType.PASS,
         play_result=PlayResult.COMPLETE,
-        possession_team="BUF",
+        scoring_possession_team="BUF",
+        display_possession_team="BUF",
+        posteam_source="feed",
         defense_team="KC",
+        defteam_source="feed",
         raw_description="Short gain",
     )
     curr = _play(
@@ -135,8 +138,11 @@ def test_quality_possession_kickoff_explained() -> None:
         play_sequence=51,
         play_type=PlayType.KICKOFF,
         play_result=PlayResult.KICKOFF_NORMAL,
-        possession_team="KC",
+        scoring_possession_team="KC",
+        display_possession_team="KC",
+        posteam_source="feed",
         defense_team="BUF",
+        defteam_source="feed",
         raw_description="Kickoff",
     )
     g = _sample_game()
@@ -150,8 +156,11 @@ def test_quality_possession_flip_on_scrimmage_still_flagged() -> None:
         play_sequence=60,
         play_type=PlayType.RUN,
         play_result=PlayResult.RUSH_GAIN,
-        possession_team="BUF",
+        scoring_possession_team="BUF",
+        display_possession_team="BUF",
+        posteam_source="feed",
         defense_team="KC",
+        defteam_source="feed",
         down=2,
         raw_description="Run",
     )
@@ -161,8 +170,11 @@ def test_quality_possession_flip_on_scrimmage_still_flagged() -> None:
         play_sequence=61,
         play_type=PlayType.RUN,
         play_result=PlayResult.RUSH_GAIN,
-        possession_team="KC",
+        scoring_possession_team="KC",
+        display_possession_team="KC",
+        posteam_source="feed",
         defense_team="BUF",
+        defteam_source="feed",
         down=1,
         raw_description="Run",
     )

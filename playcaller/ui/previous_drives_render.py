@@ -55,11 +55,26 @@ def _ribbon_marker_symbol(r: DriveAuditRow) -> str:
     return "circle"
 
 
-def render_drive_score_ribbon(report: DriveAuditReport) -> None:
-    """Cumulative score by drive from audit rows (session OC = us)."""
+def render_drive_score_ribbon(
+    report: DriveAuditReport,
+    *,
+    trace_names: tuple[str, str] | None = None,
+    unavailable_message: str | None = None,
+) -> None:
+    """Cumulative score by drive from audit rows (session OC = us by default).
+
+    Pass ``trace_names`` for home/away legend labels (e.g. warehouse historical).
+    """
     if report.score_ribbon_unavailable():
-        st.warning("⚠️ Score progression unavailable — check feed sync.")
+        st.warning(
+            unavailable_message
+            if unavailable_message is not None
+            else "⚠️ Score progression unavailable — check feed sync."
+        )
         return
+    us_label, them_label = (
+        trace_names if trace_names is not None else ("Us (session OC)", "Them")
+    )
     rows = list(report.rows)
     x = [r.chron_drive_number for r in rows]
     y_us = [r.score_after_us for r in rows]
@@ -84,8 +99,8 @@ def render_drive_score_ribbon(report: DriveAuditReport) -> None:
     color_them = "#fb7185"
     fig = go.Figure()
     for name, y_vals, color in (
-        ("Us (session OC)", y_us, color_us),
-        ("Them", y_them, color_them),
+        (us_label, y_us, color_us),
+        (them_label, y_them, color_them),
     ):
         fig.add_trace(
             go.Scatter(
@@ -238,7 +253,8 @@ def render_drive_audit_panel(report: DriveAuditReport) -> None:
     with st.expander(f"**Drive audit (debug)** — {subtitle}", expanded=False):
         st.caption(
             "Uses the **Drive integrity lens** above. Per-drive ESPN metadata (when captured), inferred outcomes, "
-            "and reconciliation vs the session scoreboard. **TD = 7 pts** (6 + PAT assumed)."
+            "and reconciliation vs the session scoreboard. **Warehouse JSON:** play-level TD=6 + explicit PAT/2PT. "
+            "**Live/ESPN import:** default TD=7 per drive when the feed does not split the PAT into its own play."
         )
         st.caption(
             "If entire **opponent** possessions are missing, sidebar **Feed team scope** was likely **Our team** "

@@ -116,7 +116,20 @@ class ActualPlayResult:
     feed_presnap_territory: Optional[str] = None  # "own" | "opponents"
     feed_presnap_yardline: Optional[int] = None
     feed_possession_team_id: Optional[str] = None
+    # Scoring: warehouse feed posteam only (never inference). None when feed was missing.
     feed_possession_team_abbr: Optional[str] = None
+    # Display: feed or inferred; never read by :func:`playcaller.implied_scoring.points_for_play`.
+    display_possession_team_abbr: Optional[str] = None
+    posteam_source: Optional[str] = None
+    defteam_source: Optional[str] = None
+    # Defteam from structured feeds (e.g. nflverse) — used for safeties and attribution checks.
+    feed_defense_team_abbr: Optional[str] = None
+    # Populated for warehouse-sourced :class:`warehouse.models.Play` rows (``PlayType|PlayResult`` values).
+    feed_warehouse_play_type: str = ""
+    feed_warehouse_play_result: str = ""
+    # :func:`warehouse.validation.canonical_home_away_scores` after play (for running-score delta fallback).
+    feed_cumulative_home: Optional[int] = None
+    feed_cumulative_away: Optional[int] = None
     # True when ESPN text indicates ``& Goal`` (structured distance may still be numeric).
     feed_presnap_goal_down: bool = False
     feed_home_score: Optional[int] = None

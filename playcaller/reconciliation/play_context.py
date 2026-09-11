@@ -188,7 +188,7 @@ def resolve_archived_pre_snap_situation(
     yl: Optional[int] = None
     hs: Optional[int] = play.feed_home_score
     aw: Optional[int] = play.feed_away_score
-    poss = str(play.feed_possession_team_abbr or "").strip()
+    poss = ""
     g2g = bool(play.feed_presnap_goal_down)
 
     fd = play.feed_presnap_down
@@ -249,6 +249,9 @@ def resolve_archived_pre_snap_situation(
     if play.feed_possession_team_abbr:
         poss = str(play.feed_possession_team_abbr).strip()
         prov["possession_team"] = "espn"
+    elif getattr(play, "display_possession_team_abbr", None):
+        poss = str(getattr(play, "display_possession_team_abbr")).strip()
+        prov["possession_team"] = "warehouse_display"
     elif ct:
         poss = ct
         prov["possession_team"] = "drive_fallback"

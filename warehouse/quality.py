@@ -145,7 +145,7 @@ def check_quality(game: Game, plays: list[Play]) -> list[QualityIssue]:
         )
 
     for prev, curr in zip(plays, plays[1:]):
-        a, b = prev.possession_team, curr.possession_team
+        a, b = prev.display_possession_team, curr.display_possession_team
         if a is None or b is None or a == b:
             continue
         if not _explains_possession_change(prev, curr):

@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
+from playcaller.domain import ActualPlayResult
 from playcaller.game import (
     DRIVE_END_UNKNOWN,
     Drive,
@@ -19,6 +20,12 @@ from playcaller.game import (
 )
 from playcaller.live_data.drive_display import chronological_team_drive_indices
 from playcaller.live_data.espn_game_state import parse_display_clock_seconds
+from playcaller.implied_scoring import (
+    ScoreBreakdown,
+    implied_totals_and_breakdown_from_warehouse_plays,
+    warehouse_possession_one_team_only_warning,
+    warehouse_session_points_for_play,
+)
 from playcaller.reconciliation.drive_reconciler import (
     espn_outcome_bucket,
     inferred_outcome_bucket,
@@ -315,20 +322,29 @@ def score_reconciliation_summary_lines(game: Game, report: DriveAuditReport) -> 
     lines: List[str] = []
     if not report.rows:
         return lines
+    wh = bool((game.session_metadata or {}).get("warehouse_processed"))
     ou, them = int(game.offense_points), int(game.defense_points)
     iu, it_ = report.implied_final_us, report.implied_final_them
+    model_note = "play-level: TD=6 and explicit PAT/2PT/FG (warehouse)" if wh else "drive-reconciled (default TD=7 when PAT not split)"
     if report.global_score_mismatch:
+        g_off = int(iu) - int(ou)
+        g_de = int(it_) - int(them)
         lines.append(
-            f"Session scoreboard **{ou}–{them}** vs implied from drives **{iu}–{it_}** (TD counted as 7 incl. PAT)."
+            f"Session scoreboard **{ou}–{them}** vs implied **{iu}–{it_}** ({model_note}) — per-team gap **{g_off:+d}** (us), **{g_de:+d}** (them)."
         )
         first_crit = next((r.chron_drive_number for r in report.rows if r.severity == "critical"), None)
         if first_crit is not None:
             lines.append(f"First **score conflict** signal at chron drive **{first_crit}**.")
-        lines.append(
-            "Common causes: missing opponent possession in archive, PAT/2PT vs TD=7 assumption, or scoreboard not synced."
-        )
+        if wh:
+            lines.append("Common causes: `posteam` labels, a missed PAT/2PT play row, or final score vs last-play running score drift.")
+        else:
+            lines.append(
+                "Common causes: missing opponent possession in archive, PAT/2PT vs TD=7 assumption, or scoreboard not synced."
+            )
     else:
-        lines.append(f"Implied totals **{iu}–{it_}** match the session scoreboard **{ou}–{them}** (within the TD=7 model).")
+        lines.append(
+            f"Implied totals **{iu}–{it_}** match the session scoreboard **{ou}–{them}** ({model_note})."
+        )
 
     first_flag = next((r.chron_drive_number for r in report.rows if r.severity != "clean"), None)
     if first_flag is not None and not report.global_score_mismatch:
@@ -359,15 +375,27 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
     """
     Build per-drive audit rows (game.drives order) and global warnings.
 
-    Uses ``possessing_team`` (offense = session OC / our team) for score reconciliation —
-    same frame as ``game.offense_points`` / ``game.defense_points``.
+    Warehouse games use play-level :mod:`implied_scoring` (TD=6 + explicit PAT/2PT/FG; §10.1).
+    All other games keep drive-reconciled possession points (``TD=7`` default when PAT signal absent).
     """
     if not game.drives:
         return DriveAuditReport((), (), False, 0, 0)
 
+    meta0 = game.session_metadata or {}
+    wh = bool(meta0.get("warehouse_processed"))
+    home_team = str(meta0.get("warehouse_home_team") or "")
+    away_team = str(meta0.get("warehouse_away_team") or "")
+
+    global_warn_list: List[str] = []
+    if wh:
+        cov = warehouse_possession_one_team_only_warning(game)
+        if cov:
+            global_warn_list.append(cov)
+
     team_seq = chronological_team_drive_indices(game)
     off_pts = def_pts = 0
     prev_off = prev_def = 0
+    prev_warehouse_play: Optional[ActualPlayResult] = None
 
     pending: List[Dict[str, Any]] = []
 
@@ -391,14 +419,25 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
             explicit_line = (audit.espn_display_result or audit.espn_result_code).strip()
         outcome_source = "Reconciled (ESPN + plays)" if audit else "Reconciled (plays only)"
 
-        possession_pts = int(rec.possession_points)
         score_off_start = off_pts
         score_def_start = def_pts
-
-        if side == "offense":
-            off_pts += possession_pts
+        if wh and home_team and away_team:
+            drive_pt_sum = 0
+            for p in dr.plays:
+                a, b, r, _src, _h = warehouse_session_points_for_play(
+                    p, prev_warehouse_play, game, home_team=home_team, away_team=away_team
+                )
+                off_pts += a
+                def_pts += b
+                drive_pt_sum += a + b
+                prev_warehouse_play = p
+            possession_pts = drive_pt_sum
         else:
-            def_pts += possession_pts
+            possession_pts = int(rec.possession_points)
+            if side == "offense":
+                off_pts += possession_pts
+            else:
+                def_pts += possession_pts
 
         flags: List[str] = []
 
@@ -553,13 +592,25 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
     diff_off = off_pts - int(game.offense_points)
     diff_def = def_pts - int(game.defense_points)
     global_score_mismatch = diff_off != 0 or diff_def != 0
-    global_warn_list: List[str] = []
     if global_score_mismatch:
-        global_warn_list.append(
-            f"⚠️ Drive outcomes imply **{off_pts}–{def_pts}** (TD=7 incl. PAT) but session scoreboard shows "
-            f"**{game.offense_points}–{game.defense_points}** — diff ({diff_off:+d}, {diff_def:+d}). "
-            "Possible missing/mislabeled drives, PAT/2PT mismatch vs assumption, or scoreboard not synced."
-        )
+        if wh and home_team and away_team:
+            _, _, bdh = implied_totals_and_breakdown_from_warehouse_plays(game)
+            b_home = bdh.get("home") or ScoreBreakdown()
+            b_away = bdh.get("away") or ScoreBreakdown()
+            h_line = b_home.as_parts_line()
+            a_line = b_away.as_parts_line()
+            global_warn_list.append(
+                f"⚠️ Implied from **plays** **{off_pts}–{def_pts}** does not match the session **"
+                f"{game.offense_points}–{game.defense_points}** (gap per team: **{diff_off:+d}**, **{diff_def:+d}**). "
+                f"Breakdown (board home/away) — home: {h_line}; away: {a_line}."
+            )
+        else:
+            global_warn_list.append(
+                f"⚠️ Drive outcomes imply **{off_pts}–{def_pts}** (reconciled possession model; default TD=7 incl. PAT) "
+                f"but session scoreboard shows **{game.offense_points}–{game.defense_points}** — "
+                f"diff per team (**{diff_off:+d}**, **{diff_def:+d}**). "
+                "Possible missing/mislabeled drives, PAT/2PT vs TD=7, or scoreboard not synced."
+            )
 
     finalized: List[DriveAuditRow] = []
     for p in pending:

@@ -30,6 +30,8 @@ from playcaller.game import (
     Game,
     complete_drive_from_plays,
 )
+from warehouse.quality import check_quality
+from warehouse.validation import canonical_home_away_scores, validate_play_sequence
 from playcaller.review.unified_review import UnifiedComparison, UnifiedReviewRow
 from playcaller.session_game_metadata import fresh_session_metadata_dict
 
@@ -47,6 +49,12 @@ from warehouse.models import (
 from warehouse.taxonomy import PlayResult, PlayType
 
 logger = logging.getLogger(__name__)
+
+# Populated on :func:`build_playcaller_game_from_warehouse` for Review Session reliability.
+WAREHOUSE_AUDIT_META_VALIDATION_ISSUES: Final[str] = "warehouse_audit_validation_issues"
+WAREHOUSE_AUDIT_META_QUALITY_ISSUES: Final[str] = "warehouse_audit_quality_issues"
+WAREHOUSE_AUDIT_META_OUTLIER_FLAGS: Final[str] = "warehouse_audit_outlier_flags"
+WAREHOUSE_AUDIT_META_REQUIRED_FIELD_GAP_PCT: Final[str] = "warehouse_audit_required_field_gap_pct"
 
 _PUNT_PLAY_RESULTS: Final[frozenset[PlayResult]] = frozenset(
     {
@@ -254,10 +262,15 @@ def _try_index_entry_from_processed_file(path: Path) -> Optional[ProcessedGameIn
     )
 
 
-def warehouse_bundle_from_processed_path(path: str | Path) -> Tuple[Game, List[UnifiedReviewRow]]:
+def warehouse_bundle_from_processed_path(
+    path: str | Path, *, with_posteam_inference: bool = False
+) -> Tuple[Game, List[UnifiedReviewRow]]:
     """
     Read one processed JSON file from disk and return the same bundle as
     :func:`warehouse_bundle_from_processed_dict`, plus model-field sanitization for historical rows.
+
+    When *with_posteam_inference* is true, runs :func:`warehouse.posteam_inference.infer_warehouse_plays`
+    on the in-memory play list before :func:`build_playcaller_game_from_warehouse` (JSON on disk is unchanged).
     """
     p = Path(path).expanduser()
     try:
@@ -287,7 +300,9 @@ def warehouse_bundle_from_processed_path(path: str | Path) -> Tuple[Game, List[U
         )
         raise ValueError(msg)
     _warn_processed_schema_version(data, path=p)
-    game, rows = warehouse_bundle_from_processed_dict(data)
+    game, rows = warehouse_bundle_from_processed_dict(
+        data, with_posteam_inference=with_posteam_inference
+    )
     rows = _finalize_warehouse_historical_rows(rows)
     return game, rows
 
@@ -322,7 +337,19 @@ def _game_from_processed_dict(raw: dict[str, Any]) -> WarehouseGame:
     )
 
 
+def _stripped_str_or_none(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s or None
+
+
 def _play_from_processed_dict(d: dict[str, Any]) -> Play:
+    sc_pos = _stripped_str_or_none(d.get("possession_team"))
+    dfd = d.get("defense_team")
+    df = _stripped_str_or_none(dfd) if dfd is not None else None
+    psrc = "feed" if sc_pos else "missing"
+    dsrc = "feed" if df else "missing"
     return Play(
         id=str(d["id"]),
         game_id=str(d["game_id"]),
@@ -338,8 +365,11 @@ def _play_from_processed_dict(d: dict[str, Any]) -> Play:
         turnover=bool(d["turnover"]),
         raw_description=str(d.get("raw_description") or ""),
         clock_seconds=int(d["clock_seconds"]) if d.get("clock_seconds") is not None else None,
-        possession_team=(str(d["possession_team"]) if d.get("possession_team") is not None else None),
-        defense_team=(str(d["defense_team"]) if d.get("defense_team") is not None else None),
+        scoring_possession_team=sc_pos,
+        display_possession_team=sc_pos,
+        posteam_source=psrc,
+        defense_team=df,
+        defteam_source=dsrc,
         down=int(d["down"]) if d.get("down") is not None else None,
         distance=int(d["distance"]) if d.get("distance") is not None else None,
         yardline_100=int(d["yardline_100"]) if d.get("yardline_100") is not None else None,
@@ -399,7 +429,7 @@ def parse_processed_payload(data: dict[str, Any]) -> Tuple[WarehouseGame, List[P
     return wh_game, plays, feats
 
 
-def _actual_play_from_warehouse(p: Play) -> ActualPlayResult:
+def _actual_play_from_warehouse(p: Play, wh_game: WarehouseGame, cumulative_ha: Tuple[int, int]) -> ActualPlayResult:
     wr = p.play_result
     wt = p.play_type
     yds = int(p.yards_gained) if p.yards_gained is not None else 0
@@ -421,6 +451,14 @@ def _actual_play_from_warehouse(p: Play) -> ActualPlayResult:
         play_type = "run"
     elif wt == PlayType.TWO_POINT:
         play_type = "two_point"
+    elif wt == PlayType.FIELD_GOAL:
+        play_type = "field_goal"
+    elif wt == PlayType.EXTRA_POINT:
+        play_type = "extra_point"
+    elif wt == PlayType.KICKOFF:
+        play_type = "kickoff"
+    elif wt == PlayType.PUNT:
+        play_type = "punt"
 
     turnover = bool(p.turnover)
     turnover_kind = ""
@@ -444,8 +482,16 @@ def _actual_play_from_warehouse(p: Play) -> ActualPlayResult:
         result_type = "punt"
     elif wr == PlayResult.SACK_TAKEN:
         sack = True
-    elif wr in (PlayResult.TOUCHDOWN_RUN, PlayResult.TOUCHDOWN_PASS, PlayResult.TOUCHDOWN_RETURN):
+    elif wr in (PlayResult.TOUCHDOWN_RUN, PlayResult.TOUCHDOWN_PASS, PlayResult.TOUCHDOWN_RETURN, PlayResult.KICKOFF_RETURN_TD):
         result_type = "touchdown"
+    elif wr in (PlayResult.EXTRA_POINT_MADE, PlayResult.EXTRA_POINT_MISSED, PlayResult.EXTRA_POINT_BLOCKED):
+        result_type = "extra_point"
+    elif wr in (PlayResult.TWO_POINT_GOOD, PlayResult.TWO_POINT_FAILED):
+        result_type = "two_point"
+    elif wr == PlayResult.SAFETY:
+        result_type = "safety"
+
+    ch, ca = int(cumulative_ha[0]), int(cumulative_ha[1])
 
     desc = (p.raw_description or "").strip()
     return ActualPlayResult(
@@ -454,7 +500,12 @@ def _actual_play_from_warehouse(p: Play) -> ActualPlayResult:
         first_down=bool(p.first_down),
         touchdown=bool(p.touchdown)
         or wr
-        in (PlayResult.TOUCHDOWN_RUN, PlayResult.TOUCHDOWN_PASS, PlayResult.TOUCHDOWN_RETURN),
+        in (
+            PlayResult.TOUCHDOWN_RUN,
+            PlayResult.TOUCHDOWN_PASS,
+            PlayResult.TOUCHDOWN_RETURN,
+            PlayResult.KICKOFF_RETURN_TD,
+        ),
         turnover=turnover,
         turnover_kind=turnover_kind,
         sack=sack,
@@ -463,6 +514,15 @@ def _actual_play_from_warehouse(p: Play) -> ActualPlayResult:
         result_type=result_type,
         pass_result=pass_result,
         external_play_id=str(p.external_play_id) if p.external_play_id else None,
+        feed_possession_team_abbr=p.scoring_possession_team,
+        display_possession_team_abbr=p.display_possession_team,
+        posteam_source=p.posteam_source,
+        defteam_source=p.defteam_source,
+        feed_defense_team_abbr=p.defense_team,
+        feed_warehouse_play_type=wt.value,
+        feed_warehouse_play_result=wr.value,
+        feed_cumulative_home=ch,
+        feed_cumulative_away=ca,
     )
 
 
@@ -488,6 +548,67 @@ def _end_kind_override_for_last_play(p: Play) -> Optional[str]:
     return None
 
 
+def _cumulative_ha_by_play(ordered: List[Play], wh: WarehouseGame) -> List[Tuple[int, int]]:
+    """(home, away) running total after each play; forward-filled when ``posteam`` is missing."""
+    out: list[tuple[int, int]] = []
+    last_h, last_a = 0, 0
+    for p in ordered:
+        ha = canonical_home_away_scores(p, wh)
+        if ha is not None:
+            last_h, last_a = int(ha[0]), int(ha[1])
+        out.append((last_h, last_a))
+    return out
+
+
+def _required_field_gap_pct_plays(plays: List[Play]) -> float:
+    """Worst missing-rate among core situation fields (matches warehouse audit spirit)."""
+    if not plays:
+        return 0.0
+    n = float(len(plays))
+    worst = 0.0
+    for attr in ("down", "distance", "yardline_100"):
+        miss = sum(1 for p in plays if getattr(p, attr) is None)
+        worst = max(worst, 100.0 * miss / n)
+    return round(worst, 2)
+
+
+def _attach_warehouse_audit_to_meta(
+    meta: Dict[str, Any],
+    wh_game: WarehouseGame,
+    plays: List[Play],
+) -> None:
+    vrep = validate_play_sequence(wh_game, plays)
+    val_n = err_n = 0
+    for i in vrep.issues:
+        if i.severity == "error":
+            err_n += 1
+        else:
+            val_n += 1
+    qn = len(check_quality(wh_game, plays))
+    meta[WAREHOUSE_AUDIT_META_VALIDATION_ISSUES] = val_n
+    meta[WAREHOUSE_AUDIT_META_OUTLIER_FLAGS] = err_n
+    meta[WAREHOUSE_AUDIT_META_QUALITY_ISSUES] = qn
+    meta[WAREHOUSE_AUDIT_META_REQUIRED_FIELD_GAP_PCT] = _required_field_gap_pct_plays(plays)
+
+
+def _possession_side_for_posteam(
+    abbr: Optional[str], *, home_team: str, away_team: str
+) -> str:
+    """
+    Map nflverse posteam to session :class:`Drive` ``possessing_team``.
+
+    :class:`Game` from warehouse uses ``offense_points`` = home final score and
+    ``defense_points`` = away; ``"offense"`` here means the team that matches **home** on the board.
+    """
+    a = (abbr or "").strip()
+    h, aw = (home_team or "").strip(), (away_team or "").strip()
+    if a and h and a == h:
+        return "offense"
+    if a and aw and a == aw:
+        return "defense"
+    return "offense"
+
+
 def build_playcaller_game_from_warehouse(
     wh_game: WarehouseGame,
     plays: List[Play],
@@ -506,6 +627,12 @@ def build_playcaller_game_from_warehouse(
         plist.sort(key=lambda x: x.play_sequence)
         _ = dn
 
+    ordered = sorted(plays, key=lambda x: (x.play_sequence, str(x.external_play_id)))
+    cum_ha = _cumulative_ha_by_play(ordered, wh_game)
+    cum_by_id: Dict[str, Tuple[int, int]] = {
+        ordered[i].id: cum_ha[i] for i in range(len(ordered))
+    }
+
     max_dn = max(by_drive.keys()) if by_drive else 0
     drives = []
     for dn in range(1, max_dn + 1):
@@ -515,9 +642,22 @@ def build_playcaller_game_from_warehouse(
                 complete_drive_from_plays([], end_kind_override=DRIVE_END_UNKNOWN),
             )
             continue
-        actuals = [_actual_play_from_warehouse(p) for p in plist]
+        p0 = plist[0]
+        pos_side = _possession_side_for_posteam(
+            p0.display_possession_team, home_team=wh_game.home_team, away_team=wh_game.away_team
+        )
+        ab0 = (p0.display_possession_team or "").strip() or pos_side
+        actuals = [_actual_play_from_warehouse(p, wh_game, cum_by_id.get(p.id, (0, 0))) for p in plist]
         end_ov = _end_kind_override_for_last_play(plist[-1]) or DRIVE_END_UNKNOWN
-        drives.append(complete_drive_from_plays(actuals, end_kind_override=end_ov))
+        drives.append(
+            complete_drive_from_plays(
+                actuals,
+                end_kind_override=end_ov,
+                possessing_team=pos_side,
+                feed_team_abbr=ab0,
+                feed_team_display_name=ab0,
+            )
+        )
 
     meta = fresh_session_metadata_dict()
     meta["warehouse_processed"] = True
@@ -525,6 +665,10 @@ def build_playcaller_game_from_warehouse(
     meta["warehouse_season"] = str(wh_game.season)
     meta["warehouse_week"] = str(wh_game.week)
     meta["game_label"] = f"{wh_game.away_team} @ {wh_game.home_team} (nflverse)"
+    meta["warehouse_home_team"] = wh_game.home_team
+    meta["warehouse_away_team"] = wh_game.away_team
+    meta["warehouse_offense_is_home"] = True
+    _attach_warehouse_audit_to_meta(meta, wh_game, plays)
 
     oh = wh_game.final_home_score
     oa = wh_game.final_away_score
@@ -545,9 +689,13 @@ def build_playcaller_game_from_warehouse(
 
 
 def warehouse_bundle_from_processed_dict(
-    data: dict[str, Any],
+    data: dict[str, Any], *, with_posteam_inference: bool = False
 ) -> Tuple[Game, List[UnifiedReviewRow]]:
     wh_game, plays, feats = parse_processed_payload(data)
+    if with_posteam_inference:
+        from warehouse.posteam_inference import infer_warehouse_plays
+
+        plays, _, _ = infer_warehouse_plays(plays, feats, wh_game)
     pc_game = build_playcaller_game_from_warehouse(wh_game, plays, feats)
     rows = to_review_rows(plays, feats, wh_game)
     return pc_game, rows

@@ -29,10 +29,12 @@ from playcaller.evaluation.snap_review_lifecycle import ensure_snap_review_list_
 from playcaller.engine import FootballPlayPredictor
 from playcaller.game import Game, game_from_dict
 from playcaller.streamlit_state.pending import apply_all_pending
+from playcaller.streamlit_state.keys import LIVE_FEED_COACHED_TEAM_ESPN_ID
 from playcaller.streamlit_state.session import (
     coached_team_espn_id_for_previous_drives,
     ensure_play_caller_session_defaults,
 )
+from playcaller.ui.review_session_ux import team_label_mode
 from playcaller.streamlit_state.ui_write_guard import reset_ui_write_guard
 from playcaller.services.game_controller import maybe_rerun_after_widgets
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
@@ -239,7 +241,17 @@ def run_review_session_page() -> None:
     assert unified_rows is not None
 
     if warehouse_mode:
+        st.session_state["wh_review_ux_mode"] = mode
+        st.session_state["wh_review_ux_label_mode"] = team_label_mode(
+            mode="warehouse_historical",
+            coached_team_set=bool(str(st.session_state.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) or "").strip()),
+        )
+        st.session_state["wh_review_ux_play_compact"] = True
         st.caption(REVIEW_CAPTION_WAREHOUSE_MODEL_PANELS)
+    else:
+        st.session_state.pop("wh_review_ux_mode", None)
+        st.session_state.pop("wh_review_ux_label_mode", None)
+        st.session_state.pop("wh_review_ux_play_compact", None)
 
     flt, show_conf, breakdown_expanded = render_review_sidebar_controls()
     render_film_room(

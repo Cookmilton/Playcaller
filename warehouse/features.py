@@ -18,7 +18,7 @@ def _was_scoring_for_new_drive(prev: Play) -> bool:
 
 
 def _possession_changed(prev: Play, curr: Play) -> bool:
-    a, b = prev.possession_team, curr.possession_team
+    a, b = prev.display_possession_team, curr.display_possession_team
     if a is None or b is None:
         return False
     return a != b

@@ -64,18 +64,18 @@ def _total_points(p: Play) -> int:
 
 def canonical_home_away_scores(p: Play, game: Game) -> tuple[int, int] | None:
     """Map posteam/defteam columns to fixed (home_score, away_score)."""
-    if p.possession_team is None:
+    if p.scoring_possession_team is None:
         return None
-    if p.possession_team == game.home_team:
+    if p.scoring_possession_team == game.home_team:
         return (int(p.score_offense), int(p.score_defense))
-    if p.possession_team == game.away_team:
+    if p.scoring_possession_team == game.away_team:
         return (int(p.score_defense), int(p.score_offense))
     return None
 
 
 def admin_play_missing_score_context(p: Play) -> bool:
     """Timeouts / end-period markers often omit possession; totals are not comparable."""
-    if p.possession_team is not None:
+    if p.scoring_possession_team is not None:
         return False
     d = (p.raw_description or "").lower()
     if "timeout" in d:
@@ -230,8 +230,8 @@ def _check_down_reset_on_first_down(plays: list[Play], issues: list[ValidationIs
     for prev, curr in zip(plays, plays[1:]):
         if not prev.first_down:
             continue
-        pt = prev.possession_team
-        ct = curr.possession_team
+        pt = prev.scoring_possession_team
+        ct = curr.scoring_possession_team
         if pt is None or ct is None or pt != ct:
             continue
         if curr.down is not None and curr.down != 1:
@@ -333,7 +333,7 @@ def _check_possession_change_explained(plays: list[Play], issues: list[Validatio
     if len(plays) < 2:
         return
     for prev, curr in zip(plays, plays[1:]):
-        a, b = prev.possession_team, curr.possession_team
+        a, b = prev.scoring_possession_team, curr.scoring_possession_team
         if a is None or b is None or a == b:
             continue
         if not _explains_possession_change(prev, curr):
