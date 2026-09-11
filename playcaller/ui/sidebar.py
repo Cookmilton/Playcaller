@@ -43,6 +43,7 @@ from playcaller.live_data.drive_display import (
     PREVIOUS_DRIVES_FILTER_OUR,
 )
 from playcaller.live_data.espn_football import fetch_event_teams
+from playcaller.live_data.espn_game_date import game_date_mismatch_warning
 from playcaller.game_situation_input import clamp_quarter_clock_seconds, period_display_label
 from playcaller.services.game_controller import (
     apply_and_rerun,
@@ -205,6 +206,9 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             st.text_input("Our team name", key=SESSION_SETUP_TEAM_NAME, placeholder="e.g. East High")
             st.text_input("Opponent", key=SESSION_SETUP_OPPONENT, placeholder="Optional")
             st.text_input("Game date", key=SESSION_SETUP_GAME_DATE, placeholder="YYYY-MM-DD")
+            date_mismatch = game_date_mismatch_warning(st.session_state)
+            if date_mismatch:
+                st.warning(date_mismatch)
             st.text_input("Game label / title", key=SESSION_SETUP_GAME_LABEL, placeholder="Optional short title")
             st.text_input("Season", key=SESSION_SETUP_SEASON, placeholder="e.g. 2026")
             st.text_input("Roster / roster version", key=SESSION_SETUP_ROSTER_VERSION, placeholder="Optional")

@@ -16,7 +16,9 @@ from playcaller.evaluation.snap_review_lifecycle import close_snap_review_row_wi
 from playcaller.state import DriveLogger
 from playcaller.streamlit_state.keys import LIVE_FEED_SEEN_PLAY_IDS
 
+from .drive_boundaries import espn_play_ids_from_plays, matching_completed_drive_for_open_log
 from .espn_play_normalize import espn_play_to_actual, should_skip_espn_play, validate_actual_for_engine
+from .types import FeedCompletedDrive
 
 
 def _plays_compatible(manual: ActualPlayResult, espn_norm: ActualPlayResult) -> bool:
@@ -109,6 +111,36 @@ def merge_current_espn_plays_into_drive_log(
                 actual=espn_actual,
             )
 
+    return n_ops
+
+
+def top_up_open_drive_log_from_completed_drives(
+    *,
+    drive_log: DriveLogger,
+    completed: Sequence[FeedCompletedDrive],
+    seen_play_ids: Set[str],
+    snap_review_audit: Optional[List[Dict[str, Any]]] = None,
+) -> int:
+    """Append missing ESPN plays from the leftover open feed drive into DriveLogger (no archive)."""
+    fd = matching_completed_drive_for_open_log(drive_log, completed)
+    if fd is None:
+        return 0
+    existing = espn_play_ids_from_plays(drive_log.results)
+    n_ops = 0
+    for play in fd.plays:
+        pid = str(play.external_play_id or "").strip()
+        if not pid or pid in existing or pid in seen_play_ids:
+            continue
+        drive_log.log(play)
+        seen_play_ids.add(pid)
+        existing.add(pid)
+        n_ops += 1
+        if snap_review_audit is not None:
+            close_snap_review_row_with_logged_actual(
+                snap_review_audit,
+                plays_after_log=len(drive_log.results),
+                actual=play,
+            )
     return n_ops
 
 

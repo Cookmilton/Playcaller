@@ -119,6 +119,23 @@ def test_pending_session_game_date_fills_empty_widget_only():
     assert ss2[SESSION_SETUP_GAME_DATE] == "2018-01-01"
 
 
+def test_pending_session_game_date_replace_overwrites_espn_owned_widget():
+    from playcaller.streamlit_state.keys import (
+        PENDING_SESSION_GAME_DATE,
+        PENDING_SESSION_GAME_DATE_REPLACE,
+        SESSION_SETUP_GAME_DATE,
+    )
+    from playcaller.streamlit_state.pending import apply_all_pending
+
+    ss: dict = {
+        SESSION_SETUP_GAME_DATE: "2026-09-11",
+        PENDING_SESSION_GAME_DATE: "2026-09-10",
+        PENDING_SESSION_GAME_DATE_REPLACE: True,
+    }
+    apply_all_pending(ss)
+    assert ss[SESSION_SETUP_GAME_DATE] == "2026-09-10"
+
+
 def test_pending_scoreboard_status_refreshes_row_detail():
     from playcaller.streamlit_state.keys import LIVE_FEED_SCOREBOARD_ROWS, PENDING_SCOREBOARD_STATUS
     from playcaller.streamlit_state.pending import apply_all_pending

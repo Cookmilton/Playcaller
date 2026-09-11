@@ -33,6 +33,7 @@ from playcaller.game import DRIVE_END_UI_AUTO
 from playcaller.history.repository_corpus import load_repository_plays
 from playcaller.history.repository_paths import resolve_history_repository_root
 from playcaller.history.repository_settings import load_history_repository_settings
+from playcaller.live_data.drive_boundaries import sort_game_drives_by_feed_sequence
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     HV_CORPUS_SOURCE,
@@ -103,6 +104,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
         apply_scoring_after_drive(g, finished)
         flip_possession_after_drive(g, finished)
         g.drives.append(finished)
+        sort_game_drives_by_feed_sequence(g)
         period = int(st.session_state.get("ui_game_period", 1))
         g.quarter = context_quarter_from_period(period)
         clk = int(st.session_state.get("ui_quarter_clock_mins", 0)) * 60 + int(

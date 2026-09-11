@@ -19,6 +19,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_NEW_GAME_UI,
     PENDING_SCOREBOARD_STATUS,
     PENDING_SESSION_GAME_DATE,
+    PENDING_SESSION_GAME_DATE_REPLACE,
     PENDING_SESSION_SETUP_HYDRATE,
     SESSION_SETUP_GAME_DATE,
     UNDO_BUNDLE,
@@ -82,9 +83,10 @@ def apply_pending_session_setup_hydrate(ss: MutableMapping[str, Any]) -> None:
 def apply_pending_session_game_date(ss: MutableMapping[str, Any]) -> None:
     """Set the game-date widget from ESPN when the operator has not typed one."""
     val = ss.pop(PENDING_SESSION_GAME_DATE, None)
+    replace = bool(ss.pop(PENDING_SESSION_GAME_DATE_REPLACE, False))
     if not val:
         return
-    if str(ss.get(SESSION_SETUP_GAME_DATE) or "").strip():
+    if str(ss.get(SESSION_SETUP_GAME_DATE) or "").strip() and not replace:
         return
     ss[SESSION_SETUP_GAME_DATE] = str(val).strip()
 

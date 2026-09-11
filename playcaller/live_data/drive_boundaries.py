@@ -1,9 +1,10 @@
 """
 Drive-boundary helpers: ESPN play ids stay unique across DriveLogger and ``game.drives``.
 
-Completed-feed import skips drives whose play ids are already in the live log or an
-archived drive. When ``drives.current.id`` moves on while the logger still holds the
-previous feed's ids, sync reports that the previous feed drive is still open — it does
+Completed-feed import skips a feed drive only when **every** ESPN play id on that drive
+is already in the live log or an archived drive. When ``drives.current.id`` moves on
+while the logger still holds the previous feed's ids, sync tops up remaining plays by
+id into DriveLogger and reports that the previous feed drive is still open — it does
 not auto-archive (operator **End drive** owns that).
 """
 
@@ -65,5 +66,70 @@ def drive_log_holds_previous_feed_drive(
 
 
 def completed_drive_overlaps_occupied(fd: FeedCompletedDrive, occupied: Set[str]) -> bool:
+    """True when this completed drive shares any ESPN play id with occupied stores."""
     ids = espn_play_ids_from_plays(fd.plays)
     return bool(ids and ids & occupied)
+
+
+def completed_drive_fully_represented(fd: FeedCompletedDrive, occupied: Set[str]) -> bool:
+    """True when every ESPN play id on the feed drive is already stored."""
+    ids = espn_play_ids_from_plays(fd.plays)
+    return bool(ids) and ids <= occupied
+
+
+def matching_completed_drive_for_open_log(
+    drive_log: DriveLogger,
+    completed: Sequence[FeedCompletedDrive],
+) -> Optional[FeedCompletedDrive]:
+    """Completed feed drive that overlaps the open logger (largest overlap wins)."""
+    open_ids = espn_play_ids_from_plays(drive_log.results)
+    if not open_ids:
+        return None
+    best: Optional[FeedCompletedDrive] = None
+    best_n = 0
+    for fd in completed or ():
+        n = len(open_ids & espn_play_ids_from_plays(fd.plays))
+        if n > best_n:
+            best = fd
+            best_n = n
+    return best
+
+
+def archived_drive_feed_sequence(drive: Any) -> Optional[int]:
+    """Sort key: first-play ``sequenceNumber`` when present, else min numeric ESPN play id."""
+    plays = getattr(drive, "plays", None) or []
+    seqs: list[int] = []
+    pids: list[int] = []
+    for play in plays:
+        raw_seq = getattr(play, "feed_sequence_number", None)
+        if raw_seq is None and isinstance(play, Mapping):
+            raw_seq = play.get("sequenceNumber") or play.get("feed_sequence_number")
+        if raw_seq is not None:
+            try:
+                seqs.append(int(str(raw_seq).strip()))
+            except (TypeError, ValueError):
+                pass
+        pid = str(getattr(play, "external_play_id", None) or "").strip()
+        if pid.isdigit():
+            pids.append(int(pid))
+    if seqs:
+        return min(seqs)
+    if pids:
+        return min(pids)
+    return None
+
+
+def sort_game_drives_by_feed_sequence(game: Game) -> None:
+    """Order ``game.drives`` by ESPN sequence, not insertion time. Manual drives keep relative order after ESPN rows."""
+    indexed = list(enumerate(game.drives or []))
+    if not indexed:
+        return
+
+    def _key(item: tuple[int, Any]) -> tuple[int, int, int]:
+        i, dr = item
+        seq = archived_drive_feed_sequence(dr)
+        if seq is None:
+            return (1, i, i)
+        return (0, seq, i)
+
+    game.drives = [dr for _, dr in sorted(indexed, key=_key)]

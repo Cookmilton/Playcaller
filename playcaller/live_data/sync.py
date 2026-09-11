@@ -48,8 +48,6 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_TEAM_SCOPE,
     LIVE_FEED_TRUSTED_CLOCK,
     PENDING_SCOREBOARD_STATUS,
-    PENDING_SESSION_GAME_DATE,
-    SESSION_SETUP_GAME_DATE,
 )
 from playcaller.streamlit_state.widget_backend_bridge import (
     GAME_DISTANCE_MAX,
@@ -79,7 +77,9 @@ from .espn_current_drive_merge import (
     merge_current_espn_plays_into_drive_log,
     persist_seen_play_ids,
     prepare_seen_play_ids_for_feed,
+    top_up_open_drive_log_from_completed_drives,
 )
+from .espn_game_date import apply_espn_game_date_to_session
 from .espn_import_merge import merge_completed_espn_drives_into_game
 from .feed_team_scope import current_feed_plays_merge_allowed, normalize_feed_team_scope
 from .types import FeedCompletedDrive, FeedPlayEvent, NormalizedGameSnapshot, SyncResult
@@ -291,6 +291,28 @@ def apply_snapshot(
     if leftover_open:
         skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
 
+    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
+    seen: Set[str] = prepare_seen_play_ids_for_feed(
+        session,
+        current_feed_drive_id=snapshot.current_feed_drive_id,
+        last_feed_drive_id=last_drive_id,
+        reset_on_drive_change=(
+            options.reset_seen_play_ids_on_feed_drive_id_change and not leftover_open
+        ),
+    )
+    seen |= espn_play_ids_from_archived_drives(game)
+
+    tail_top_up = 0
+    if leftover_open and snapshot.completed_feed_drives:
+        tail_top_up = top_up_open_drive_log_from_completed_drives(
+            drive_log=drive_log,
+            completed=snapshot.completed_feed_drives,
+            seen_play_ids=seen,
+            snap_review_audit=game.recommendation_audit,
+        )
+        if tail_top_up:
+            applied.append(f"previous_drive_tail_plays:{tail_top_up}")
+
     drives_imported = 0
     imported_batch: Tuple[FeedCompletedDrive, ...] = ()
     if (
@@ -309,18 +331,8 @@ def apply_snapshot(
         )
         if drives_imported:
             applied.append(f"imported_completed_drives:{drives_imported}")
+            seen |= espn_play_ids_from_archived_drives(game)
     completed_drive_plays_imported = sum(len(fd.plays) for fd in imported_batch)
-
-    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
-    seen: Set[str] = prepare_seen_play_ids_for_feed(
-        session,
-        current_feed_drive_id=snapshot.current_feed_drive_id,
-        last_feed_drive_id=last_drive_id,
-        reset_on_drive_change=(
-            options.reset_seen_play_ids_on_feed_drive_id_change and not leftover_open
-        ),
-    )
-    seen |= espn_play_ids_from_archived_drives(game)
 
     current_drive_merged = 0
     current_merge_debug: List[str] = []
@@ -402,10 +414,7 @@ def apply_snapshot(
     if snapshot.current_feed_drive_id and not leftover_open:
         session[LIVE_FEED_LAST_CURRENT_DRIVE_ID] = str(snapshot.current_feed_drive_id)
 
-    feed_date = str(snapshot.game_date or "").strip()
-    widget_date = str(session.get(SESSION_SETUP_GAME_DATE) or "").strip()
-    if feed_date and not widget_date:
-        session[PENDING_SESSION_GAME_DATE] = feed_date
+    apply_espn_game_date_to_session(session, str(snapshot.game_date or "").strip())
 
     detail = str(snapshot.status_detail or "").strip()
     eid = str(snapshot.external_game_id or "").strip()
@@ -437,6 +446,7 @@ def apply_snapshot(
         "drives_imported": drives_imported,
         "completed_drive_plays_imported": completed_drive_plays_imported,
         "current_drive_plays_merged": current_drive_merged,
+        "previous_drive_tail_plays": tail_top_up,
         "current_drive_merge_debug": list(current_merge_debug),
         # Row accounting: any change here not explained by the counters above came from
         # outside this sync (manual logging, undo) or from a drive-log reset.

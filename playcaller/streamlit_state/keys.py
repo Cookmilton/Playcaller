@@ -34,6 +34,8 @@ PENDING_NEW_GAME_UI = "pending_new_game_ui"
 PENDING_SESSION_SETUP_HYDRATE = "pending_session_setup_hydrate"
 # Fill ``session_setup_game_date`` from ESPN before that widget instantiates (empty operator date only).
 PENDING_SESSION_GAME_DATE = "pending_session_game_date"
+# When True, pending ESPN date overwrites an ESPN-hydrated widget (not an operator date).
+PENDING_SESSION_GAME_DATE_REPLACE = "pending_session_game_date_replace"
 # Patch ``live_feed_scoreboard_rows[].detail`` from snapshot status before the Game selectbox.
 PENDING_SCOREBOARD_STATUS = "pending_scoreboard_status"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit

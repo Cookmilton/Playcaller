@@ -9,7 +9,10 @@ from pathlib import Path
 
 from playcaller.domain import ActualPlayResult
 from playcaller.game import Game, complete_drive_from_plays
-from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN
+from playcaller.live_data.drive_boundaries import (
+    PREVIOUS_FEED_DRIVE_OPEN,
+    sort_game_drives_by_feed_sequence,
+)
 from playcaller.live_data.espn_football import parse_espn_summary
 from playcaller.live_data.sync import SyncOptions, apply_snapshot
 from playcaller.state import DriveLogger
@@ -57,8 +60,20 @@ def _assert_unique(ids: list[str]) -> None:
 def _end_drive(game: Game, drive_log: DriveLogger, session: dict) -> None:
     finished = complete_drive_from_plays(list(drive_log.results), possessing_team="offense")
     game.drives.append(finished)
+    sort_game_drives_by_feed_sequence(game)
     drive_log.reset()
     session[LIVE_FEED_SEEN_PLAY_IDS] = []
+
+
+def _td_play(base: dict, play_id: str) -> dict:
+    td = copy.deepcopy(base)
+    td["id"] = play_id
+    td["sequenceNumber"] = "60000"
+    td["text"] = "M.Stafford pass complete to P.Nacua for 66 yards, TOUCHDOWN."
+    td["statYardage"] = 66
+    td["scoringPlay"] = True
+    td["type"] = {"id": "67", "text": "Passing Touchdown", "abbreviation": "TD"}
+    return td
 
 
 def test_two_coached_drives_skip_completed_import_until_end_drive() -> None:
@@ -149,3 +164,95 @@ def test_manual_logger_row_is_kept_when_feed_drive_completes() -> None:
     apply_snapshot(game=game, session=session, drive_log=dl, snapshot=_snap(sm2), options=SyncOptions())
     assert any(p.description == "manual" for p in dl.results)
     assert len(dl.results) == 3
+
+
+def test_tail_td_between_syncs_is_in_logger_then_archived() -> None:
+    session: dict = {LIVE_FEED_SEEN_PLAY_IDS: [], LIVE_FEED_TEAM_SCOPE: "our"}
+    game = Game.new_game()
+    dl = DriveLogger()
+    apply_snapshot(game=game, session=session, drive_log=dl, snapshot=_snap(), options=SyncOptions())
+    assert [p.external_play_id for p in dl.results] == ["401872657543", "401872657573"]
+
+    sm2 = _summary()
+    x = copy.deepcopy(sm2["drives"]["current"])
+    td_id = "401872657600"
+    x["plays"] = list(x["plays"]) + [_td_play(x["plays"][-1], td_id)]
+    sm2["drives"]["previous"] = list(sm2["drives"]["previous"]) + [x]
+    sm2["drives"]["current"] = {
+        "id": "40187265799",
+        "team": dict(x["team"]),
+        "plays": [
+            {**copy.deepcopy(x["plays"][0]), "id": "Y0", "sequenceNumber": "90000"},
+            {**copy.deepcopy(x["plays"][1]), "id": "Y1", "sequenceNumber": "90100"},
+        ],
+    }
+    res2 = apply_snapshot(
+        game=game, session=session, drive_log=dl, snapshot=_snap(sm2), options=SyncOptions()
+    )
+    assert PREVIOUS_FEED_DRIVE_OPEN in res2.skipped_reasons
+    assert td_id in [p.external_play_id for p in dl.results]
+    assert any("TOUCHDOWN" in (p.description or "").upper() or p.touchdown for p in dl.results)
+    _assert_unique(_espn_ids(dl, game))
+    n_before_end = len(game.drives)
+
+    _end_drive(game, dl, session)
+    assert td_id in [p.external_play_id for d in game.drives for p in (d.plays or [])]
+    _assert_unique(_espn_ids(dl, game))
+
+    res3 = apply_snapshot(
+        game=game, session=session, drive_log=dl, snapshot=_snap(sm2), options=SyncOptions()
+    )
+    assert res3.current_drive_plays_merged == 2
+    assert [p.external_play_id for p in dl.results] == ["Y0", "Y1"]
+    assert len(game.drives) == n_before_end + 1
+    _assert_unique(_espn_ids(dl, game))
+
+
+def test_archived_drives_order_by_espn_sequence_not_insertion() -> None:
+    session: dict = {LIVE_FEED_SEEN_PLAY_IDS: [], LIVE_FEED_TEAM_SCOPE: "our"}
+    game = Game.new_game()
+    dl = DriveLogger()
+    apply_snapshot(game=game, session=session, drive_log=dl, snapshot=_snap(), options=SyncOptions())
+    n_prior = len(game.drives)
+
+    sm2 = _summary()
+    x = copy.deepcopy(sm2["drives"]["current"])
+    later_opp = {
+        "id": "401872657z",
+        "team": {"id": "25", "abbreviation": "SF"},
+        "plays": [
+            {
+                **copy.deepcopy(x["plays"][0]),
+                "id": "401872657900",
+                "sequenceNumber": "90000",
+            }
+        ],
+    }
+    sm2["drives"]["previous"] = list(sm2["drives"]["previous"]) + [x, later_opp]
+    sm2["drives"]["current"] = {"id": "40187265799", "team": {"id": "25"}, "plays": []}
+    apply_snapshot(game=game, session=session, drive_log=dl, snapshot=_snap(sm2), options=SyncOptions())
+    imported_ids = [
+        p.external_play_id for d in game.drives[n_prior:] for p in (d.plays or []) if p.external_play_id
+    ]
+    assert imported_ids == ["401872657900"]
+    assert [p.external_play_id for p in dl.results] == ["401872657543", "401872657573"]
+
+    _end_drive(game, dl, session)
+    seq_ids = []
+    for d in game.drives:
+        pids = [p.external_play_id for p in (d.plays or []) if p.external_play_id]
+        if pids:
+            seq_ids.append(min(int(pid) for pid in pids if str(pid).isdigit()))
+    assert seq_ids == sorted(seq_ids)
+    x_idx = next(
+        i
+        for i, d in enumerate(game.drives)
+        if any(p.external_play_id == "401872657543" for p in (d.plays or []))
+    )
+    z_idx = next(
+        i
+        for i, d in enumerate(game.drives)
+        if any(p.external_play_id == "401872657900" for p in (d.plays or []))
+    )
+    assert x_idx < z_idx
+    _assert_unique(_espn_ids(dl, game))

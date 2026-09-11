@@ -31,7 +31,7 @@ def test_game_date_from_scoreboard_not_invented() -> None:
     snap = parse_espn_summary(
         _summary(), sport="nfl", our_team_id=LAR, scoreboard_payload=_scoreboard()
     )
-    assert snap.game_date == "2026-09-11"
+    assert snap.game_date == "2026-09-10"
     snap_unknown = parse_espn_summary(_summary(), sport="nfl", our_team_id=LAR)
     assert snap_unknown.game_date is None
 
@@ -48,7 +48,7 @@ def test_apply_snapshot_queues_session_date_and_scoreboard_detail() -> None:
         snapshot=snap,
         options=SyncOptions(),
     )
-    assert session[PENDING_SESSION_GAME_DATE] == "2026-09-11"
+    assert session[PENDING_SESSION_GAME_DATE] == "2026-09-10"
     assert session[PENDING_SCOREBOARD_STATUS]["event_id"] == EVENT
     assert session[PENDING_SCOREBOARD_STATUS]["detail"] == snap.status_detail
 
@@ -61,3 +61,23 @@ def test_apply_snapshot_queues_session_date_and_scoreboard_detail() -> None:
         options=SyncOptions(),
     )
     assert PENDING_SESSION_GAME_DATE not in session2
+    from playcaller.live_data.espn_game_date import (
+        LIVE_FEED_GAME_DATE_MISMATCH,
+        calendar_date_from_espn_iso,
+        game_date_mismatch_warning,
+    )
+
+    assert session2[LIVE_FEED_GAME_DATE_MISMATCH] == {
+        "session": "2018-01-01",
+        "espn": "2026-09-10",
+    }
+    warn = game_date_mismatch_warning(session2) or ""
+    assert "2018-01-01" in warn and "2026-09-10" in warn
+
+
+def test_espn_utc_timestamp_uses_eastern_calendar_date() -> None:
+    from playcaller.live_data.espn_game_date import calendar_date_from_espn_iso
+
+    assert calendar_date_from_espn_iso("2026-09-11T00:15Z") == "2026-09-10"
+    assert calendar_date_from_espn_iso("2026-09-10") == "2026-09-10"
+    assert calendar_date_from_espn_iso("") is None
