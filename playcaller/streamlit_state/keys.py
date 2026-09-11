@@ -32,6 +32,10 @@ PENDING_END_DRIVE_UI = "pending_end_drive_ui"
 PENDING_NEW_GAME_UI = "pending_new_game_ui"
 # Queue ``hydrate_session_setup_widgets`` for the next run (before those widgets instantiate).
 PENDING_SESSION_SETUP_HYDRATE = "pending_session_setup_hydrate"
+# Fill ``session_setup_game_date`` from ESPN before that widget instantiates (empty operator date only).
+PENDING_SESSION_GAME_DATE = "pending_session_game_date"
+# Patch ``live_feed_scoreboard_rows[].detail`` from snapshot status before the Game selectbox.
+PENDING_SCOREBOARD_STATUS = "pending_scoreboard_status"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
 # treats ``st.rerun()`` as a completed run and drops widget keys that never instantiated.
 PENDING_RERUN_AFTER_WIDGETS = "pending_rerun_after_widgets"
@@ -69,6 +73,8 @@ LIVE_FEED_SEEN_PLAY_IDS = "live_feed_seen_play_ids"
 LIVE_FEED_LAST_POSSESSION_TEAM_ID = "live_feed_last_possession_team_id"
 # Last ESPN ``drives.current.id`` applied; seen-play-id reset keys on this, not board possession.
 LIVE_FEED_LAST_CURRENT_DRIVE_ID = "live_feed_last_current_drive_id"
+# Operator vs preset origin for personnel/box/coverage/safeties (not a widget; never ESPN-observed).
+DEFENSE_LOOK_ORIGIN = "defense_look_origin"
 # Persists the operator's **Our team** ESPN id for the current session/game; survives ``clear_live_feed_session_keys``.
 LIVE_FEED_COACHED_TEAM_ESPN_ID = "live_feed_coached_team_espn_id"
 # Which ESPN feed possessions enter the session: ``our`` | ``opponent`` | ``both`` (see ``drive_display`` constants).

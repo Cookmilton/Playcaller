@@ -8,7 +8,6 @@ plus :data:`~playcaller.streamlit_state.keys.LIVE_FEED_SEEN_PLAY_IDS`.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import replace
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
@@ -18,7 +17,6 @@ from playcaller.state import DriveLogger
 from playcaller.streamlit_state.keys import LIVE_FEED_SEEN_PLAY_IDS
 
 from .espn_play_normalize import espn_play_to_actual, should_skip_espn_play, validate_actual_for_engine
-from .types import FeedCompletedDrive
 
 
 def _plays_compatible(manual: ActualPlayResult, espn_norm: ActualPlayResult) -> bool:
@@ -112,32 +110,6 @@ def merge_current_espn_plays_into_drive_log(
             )
 
     return n_ops
-
-
-def maybe_reset_drive_log_after_completed_import(
-    drive_log: DriveLogger,
-    imported_batch: Sequence[FeedCompletedDrive],
-    session: MutableMapping[str, Any],
-) -> bool:
-    """
-    If exactly one completed drive was imported this sync and its ESPN play ids match the
-    in-memory drive log (all feed-tagged rows), clear the log so history lives in ``game.drives``.
-
-    Manual-only rows without ids void the match — the operator keeps the live log.
-    """
-    if len(imported_batch) != 1:
-        return False
-    fd = imported_batch[0]
-    ids_imp = [p.external_play_id for p in fd.plays if p.external_play_id]
-    if not ids_imp:
-        return False
-    c_imp = Counter(ids_imp)
-    c_log = Counter(p.external_play_id for p in drive_log.results if p.external_play_id)
-    if c_imp != c_log:
-        return False
-    drive_log.reset()
-    session[LIVE_FEED_SEEN_PLAY_IDS] = []
-    return True
 
 
 def prepare_seen_play_ids_for_feed(

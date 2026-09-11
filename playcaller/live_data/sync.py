@@ -47,6 +47,9 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_MANUAL_NOTE,
     LIVE_FEED_TEAM_SCOPE,
     LIVE_FEED_TRUSTED_CLOCK,
+    PENDING_SCOREBOARD_STATUS,
+    PENDING_SESSION_GAME_DATE,
+    SESSION_SETUP_GAME_DATE,
 )
 from playcaller.streamlit_state.widget_backend_bridge import (
     GAME_DISTANCE_MAX,
@@ -66,9 +69,14 @@ from ..game import Game
 from ..game_situation_input import clamp_quarter_clock_seconds, context_quarter_from_period
 from ..situation import territory_yardline_from_abs_yards
 from ..state import DriveLogger
+from .drive_boundaries import (
+    PREVIOUS_FEED_DRIVE_OPEN,
+    drive_log_holds_previous_feed_drive,
+    espn_play_ids_from_archived_drives,
+    occupied_espn_play_ids,
+)
 from .espn_current_drive_merge import (
     merge_current_espn_plays_into_drive_log,
-    maybe_reset_drive_log_after_completed_import,
     persist_seen_play_ids,
     prepare_seen_play_ids_for_feed,
 )
@@ -277,6 +285,12 @@ def apply_snapshot(
 
     feed_scope = normalize_feed_team_scope(str(session.get(LIVE_FEED_TEAM_SCOPE) or ""))
 
+    leftover_open = drive_log_holds_previous_feed_drive(
+        drive_log, snapshot.current_feed_drive_plays
+    )
+    if leftover_open:
+        skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
+
     drives_imported = 0
     imported_batch: Tuple[FeedCompletedDrive, ...] = ()
     if (
@@ -291,21 +305,22 @@ def apply_snapshot(
             snapshot.completed_feed_drives,
             coached_team_id=str(snapshot.coached_team_id),
             feed_team_scope=feed_scope,
+            occupied_play_ids=occupied_espn_play_ids(game, drive_log),
         )
         if drives_imported:
             applied.append(f"imported_completed_drives:{drives_imported}")
     completed_drive_plays_imported = sum(len(fd.plays) for fd in imported_batch)
-
-    if maybe_reset_drive_log_after_completed_import(drive_log, imported_batch, session):
-        applied.append("drive_log_reset:completed_feed_match")
 
     last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
     seen: Set[str] = prepare_seen_play_ids_for_feed(
         session,
         current_feed_drive_id=snapshot.current_feed_drive_id,
         last_feed_drive_id=last_drive_id,
-        reset_on_drive_change=options.reset_seen_play_ids_on_feed_drive_id_change,
+        reset_on_drive_change=(
+            options.reset_seen_play_ids_on_feed_drive_id_change and not leftover_open
+        ),
     )
+    seen |= espn_play_ids_from_archived_drives(game)
 
     current_drive_merged = 0
     current_merge_debug: List[str] = []
@@ -315,6 +330,7 @@ def apply_snapshot(
         and not options.lock_situation
         and snapshot.coached_team_id
         and snapshot.current_feed_drive_plays
+        and not leftover_open
     ):
         allow_cur, scope_msg = current_feed_plays_merge_allowed(
             scope=feed_scope,
@@ -383,8 +399,18 @@ def apply_snapshot(
 
     if snapshot.possession_team_id:
         session[LIVE_FEED_LAST_POSSESSION_TEAM_ID] = str(snapshot.possession_team_id)
-    if snapshot.current_feed_drive_id:
+    if snapshot.current_feed_drive_id and not leftover_open:
         session[LIVE_FEED_LAST_CURRENT_DRIVE_ID] = str(snapshot.current_feed_drive_id)
+
+    feed_date = str(snapshot.game_date or "").strip()
+    widget_date = str(session.get(SESSION_SETUP_GAME_DATE) or "").strip()
+    if feed_date and not widget_date:
+        session[PENDING_SESSION_GAME_DATE] = feed_date
+
+    detail = str(snapshot.status_detail or "").strip()
+    eid = str(snapshot.external_game_id or "").strip()
+    if eid and detail:
+        session[PENDING_SCOREBOARD_STATUS] = {"event_id": eid, "detail": detail}
 
     coached_audit = str(snapshot.coached_team_id).strip() if snapshot.coached_team_id else ""
     if coached_audit:

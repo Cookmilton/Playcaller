@@ -347,8 +347,8 @@ def test_scoreboard_possession_flip_does_not_remerge_same_current_drive() -> Non
     assert len(ids_after_second) == len(set(ids_after_second))
 
 
-def test_new_current_feed_drive_id_resets_seen_and_merges_new_plays_once() -> None:
-    """A new coached-team ``drives.current.id`` clears seen ids so the new plays merge once."""
+def test_new_current_feed_drive_id_holds_previous_logger_until_end_drive() -> None:
+    """A new coached-team ``drives.current.id`` does not auto-archive or mash drives in the log."""
     session: dict = {LIVE_FEED_SEEN_PLAY_IDS: [], LIVE_FEED_TEAM_SCOPE: "our"}
     game = Game.new_game()
     dl = DriveLogger()
@@ -379,15 +379,17 @@ def test_new_current_feed_drive_id_resets_seen_and_merges_new_plays_once() -> No
         snapshot=_snapshot(sm2, scoreboard=_scoreboard()),
         options=SyncOptions(),
     )
-    assert session["live_feed_last_current_drive_id"] == "40187265799"
-    assert res2.current_drive_plays_merged == len(new_plays)
-    log_ids = [p.external_play_id for p in dl.results]
-    for pid in first_ids:
-        assert log_ids.count(pid) == 1
-    for pid in new_ids:
-        assert log_ids.count(pid) == 1
-    assert seen_after_first.isdisjoint(set(session[LIVE_FEED_SEEN_PLAY_IDS]))
-    assert set(session[LIVE_FEED_SEEN_PLAY_IDS]) == set(new_ids)
+    assert session["live_feed_last_current_drive_id"] == "4018726573"
+    assert res2.current_drive_plays_merged == 0
+    assert [p.external_play_id for p in dl.results] == first_ids
+    assert "previous feed drive still open in DriveLogger" in res2.skipped_reasons
+    assert set(session[LIVE_FEED_SEEN_PLAY_IDS]) == seen_after_first
+
+    from playcaller.game import complete_drive_from_plays
+
+    game.drives.append(complete_drive_from_plays(list(dl.results), possessing_team="offense"))
+    dl.reset()
+    session[LIVE_FEED_SEEN_PLAY_IDS] = []
 
     res3 = apply_snapshot(
         game=game,
@@ -396,10 +398,12 @@ def test_new_current_feed_drive_id_resets_seen_and_merges_new_plays_once() -> No
         snapshot=_snapshot(sm2, scoreboard=_scoreboard()),
         options=SyncOptions(),
     )
-    assert res3.current_drive_plays_merged == 0
-    log_ids_again = [p.external_play_id for p in dl.results]
-    for pid in new_ids:
-        assert log_ids_again.count(pid) == 1
+    assert res3.current_drive_plays_merged == len(new_plays)
+    assert [p.external_play_id for p in dl.results] == new_ids
+    log_and_archive = [p.external_play_id for p in dl.results] + [
+        p.external_play_id for d in game.drives for p in (d.plays or []) if p.external_play_id
+    ]
+    assert len(log_and_archive) == len(set(log_and_archive))
 
 
 # --------------------------------------------------------------------------- field position

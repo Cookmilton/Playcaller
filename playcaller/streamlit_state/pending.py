@@ -13,10 +13,14 @@ from typing import Any, MutableMapping
 
 from playcaller.streamlit_state.keys import (
     LAST_DRIVE_SNAP_CONTEXT,
+    LIVE_FEED_SCOREBOARD_ROWS,
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
+    PENDING_SCOREBOARD_STATUS,
+    PENDING_SESSION_GAME_DATE,
     PENDING_SESSION_SETUP_HYDRATE,
+    SESSION_SETUP_GAME_DATE,
     UNDO_BUNDLE,
 )
 
@@ -75,10 +79,38 @@ def apply_pending_session_setup_hydrate(ss: MutableMapping[str, Any]) -> None:
     hydrate_session_setup_widgets(ss, game)
 
 
+def apply_pending_session_game_date(ss: MutableMapping[str, Any]) -> None:
+    """Set the game-date widget from ESPN when the operator has not typed one."""
+    val = ss.pop(PENDING_SESSION_GAME_DATE, None)
+    if not val:
+        return
+    if str(ss.get(SESSION_SETUP_GAME_DATE) or "").strip():
+        return
+    ss[SESSION_SETUP_GAME_DATE] = str(val).strip()
+
+
+def apply_pending_scoreboard_status(ss: MutableMapping[str, Any]) -> None:
+    """Refresh the Game dropdown's scoreboard ``detail`` from the last successful sync."""
+    patch = ss.pop(PENDING_SCOREBOARD_STATUS, None)
+    if not isinstance(patch, dict):
+        return
+    eid = str(patch.get("event_id") or "").strip()
+    detail = str(patch.get("detail") or "")
+    if not eid:
+        return
+    rows = ss.get(LIVE_FEED_SCOREBOARD_ROWS)
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("id") or "") == eid:
+            row["detail"] = detail
+            break
+
+
 def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     """
     Single entrypoint: quick-log advance → end-drive clock/possession → new-game full reset
-    → session-setup hydrate.
+    → session-setup hydrate → ESPN session date → scoreboard status label.
 
     Order matters when multiple buffers are present (last writer wins on overlapping keys).
     """
@@ -86,6 +118,8 @@ def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     apply_pending_end_drive_ui(ss)
     apply_pending_new_game_ui(ss)
     apply_pending_session_setup_hydrate(ss)
+    apply_pending_session_game_date(ss)
+    apply_pending_scoreboard_status(ss)
 
 
 def clear_in_progress_log_state(ss: MutableMapping[str, Any]) -> None:

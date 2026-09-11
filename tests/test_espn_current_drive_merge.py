@@ -126,7 +126,7 @@ def test_lock_situation_skips_current_drive_merge() -> None:
     assert len(dl.results) == 0
 
 
-def test_completed_drive_import_clears_matching_drive_log() -> None:
+def test_completed_drive_import_skips_ids_still_in_drive_log() -> None:
     payload = _load_fixture()
     snap1 = parse_espn_summary(payload, sport="nfl", our_team_id="14")
     game = Game.new_game()
@@ -151,9 +151,10 @@ def test_completed_drive_import_clears_matching_drive_log() -> None:
     )
     payload2["drives"]["current"] = {"plays": []}
     snap2 = parse_espn_summary(payload2, sport="nfl", our_team_id="14")
-    apply_snapshot(game=game, session=session, drive_log=dl, snapshot=snap2, options=SyncOptions())
-    assert len(game.drives) == 3
-    assert len(dl.results) == 0
+    res2 = apply_snapshot(game=game, session=session, drive_log=dl, snapshot=snap2, options=SyncOptions())
+    assert len(game.drives) == 2
+    assert len(dl.results) == 2
+    assert "previous feed drive still open in DriveLogger" in res2.skipped_reasons
 
 
 def test_current_drive_merge_closes_open_snap_review_row() -> None:
