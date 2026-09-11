@@ -100,8 +100,8 @@ class SyncOptions:
     lock_score: bool = False
     auto_append_feed_plays: bool = False
     only_append_when_our_possession: bool = True
-    # Name is historical; the reset keys on ``drives.current.id``, not board possession.
-    reset_seen_play_ids_on_possession_change: bool = True
+    # When True, clear seen ESPN play ids if ``drives.current.id`` changes (not board possession).
+    reset_seen_play_ids_on_feed_drive_change: bool = True
     import_completed_feed_drives: bool = True
     # Full ``drives.current`` plays → ``DriveLogger`` (normalized); supersedes coarse auto-append for ESPN.
     import_current_feed_drive_plays: bool = True
@@ -304,7 +304,7 @@ def apply_snapshot(
         session,
         current_feed_drive_id=snapshot.current_feed_drive_id,
         last_feed_drive_id=last_drive_id,
-        reset_on_drive_change=options.reset_seen_play_ids_on_possession_change,
+        reset_on_drive_change=options.reset_seen_play_ids_on_feed_drive_change,
     )
 
     current_drive_merged = 0
