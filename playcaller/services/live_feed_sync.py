@@ -22,12 +22,6 @@ from playcaller.streamlit_state.keys import (
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
 )
-from playcaller.ui.espn_live_flow import (
-    derive_espn_sync_readiness,
-    manual_lookup_status,
-    EspnLiveSyncReadiness,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,8 +32,10 @@ def request_live_sync() -> None:
     st.session_state[LIVE_SYNC_REQUESTED] = True
 
 
-def sync_readiness_from_session(ss: MutableMapping[str, Any]) -> EspnLiveSyncReadiness:
+def sync_readiness_from_session(ss: MutableMapping[str, Any]):
     """Resolve event id + coached team from the last committed widget/session values."""
+    from playcaller.ui.espn_live_flow import derive_espn_sync_readiness, manual_lookup_status
+
     adv = str(ss.get("ui_live_our_team_advanced") or "").strip()
     rows = ss.get(LIVE_FEED_SCOREBOARD_ROWS) or []
     if isinstance(rows, list) and rows:
@@ -94,11 +90,21 @@ def run_requested_live_sync(ss: MutableMapping[str, Any]) -> Optional[str]:
     If ``LIVE_SYNC_REQUESTED``, fetch ESPN and ``apply_snapshot`` before widgets.
 
     Returns a toast string for the caller (or ``None``). Sets ``LIVE_FEED_LAST_ERROR`` on failure.
-    Polling can set the same flag.
+    Polling can set the same flag. The request flag is always cleared in ``finally``.
     """
-    if not ss.pop(LIVE_SYNC_REQUESTED, False):
+    if not ss.get(LIVE_SYNC_REQUESTED):
         return None
+    try:
+        return _run_live_sync_body(ss)
+    except Exception as exc:
+        logger.exception("Live ESPN sync failed")
+        ss[LIVE_FEED_LAST_ERROR] = str(exc) or "Fetch failed."
+        return None
+    finally:
+        ss.pop(LIVE_SYNC_REQUESTED, None)
 
+
+def _run_live_sync_body(ss: MutableMapping[str, Any]) -> Optional[str]:
     game = ss.get("game")
     drive_log = ss.get("drive_log")
     if not isinstance(game, Game) or not isinstance(drive_log, DriveLogger):
