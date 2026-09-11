@@ -82,6 +82,14 @@ def test_audit_context_from_metadata() -> None:
     assert ctx["team_name"] == "T"
     assert ctx["is_simulated"] is True
     assert ctx["session_game_id"] == g.session_metadata.get("session_game_id")
+    assert ctx["game_date"] == "2026-01-02"
+
+
+def test_audit_context_game_date_is_null_when_unknown() -> None:
+    g = Game.new_game()
+    ctx = audit_context_from_game_metadata(g.session_metadata)
+    assert ctx is not None
+    assert ctx["game_date"] is None
 
 
 def test_audit_record_accepts_session_context() -> None:

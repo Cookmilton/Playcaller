@@ -73,6 +73,8 @@ class NormalizedGameSnapshot:
     situation_source: Optional[SituationSource] = None
     # Raw yards-to-opponent-goal behind ``abs_yards_from_own_goal`` (kept for range reporting).
     yards_to_endzone: Optional[int] = None
+    # UTC calendar date from ESPN event/competition timestamp; None when the payload has none.
+    game_date: Optional[str] = None
 
 
 @dataclass

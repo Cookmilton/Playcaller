@@ -114,7 +114,7 @@ def audit_context_from_game_metadata(meta: Optional[Mapping[str, Any]]) -> Optio
         "session_game_id": m.session_game_id,
         "team_name": m.team_name,
         "opponent": m.opponent,
-        "game_date": m.game_date,
+        "game_date": (m.game_date or "").strip() or None,
         "game_label": m.game_label,
         "season": m.season,
         "roster_version": m.roster_version,

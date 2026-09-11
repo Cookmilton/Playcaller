@@ -12,6 +12,7 @@ from .espn_game_state import (
     resolve_espn_clock_seconds,
     snapshot_state_sanity_flags,
 )
+from .espn_game_date import resolve_espn_game_date
 from .espn_play_text_players import play_text_from_espn_row
 from .espn_situation import resolve_espn_situation, situation_timeouts_for_coached_team
 from .espn_summary_teams import team_labels_from_espn_summary
@@ -363,6 +364,7 @@ def parse_espn_summary(
         current_feed_drive_team_espn_id=cur_team_id,
         situation_source=situation.source if situation else None,
         yards_to_endzone=yards_to_endzone,
+        game_date=resolve_espn_game_date(payload, scoreboard_payload, event_id=eid),
     )
 
 
