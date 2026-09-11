@@ -44,3 +44,15 @@ def test_choose_play_is_deterministic_with_seed() -> None:
     p1 = hp.choose_play("quick_game", ctx, rng1, mi)
     p2 = hp.choose_play("quick_game", ctx, rng2, mi)
     assert p1["name"] == p2["name"]
+    assert p1 is not p2
+
+
+def test_predict_twice_leaves_catalog_unchanged() -> None:
+    import copy
+
+    hp = HeuristicPredictor()
+    ctx = GameContext(down=1, distance=10, yardline=25, territory="own")
+    before = copy.deepcopy(PLAY_LIBRARY)
+    hp.recommend(ctx)
+    hp.recommend(ctx)
+    assert PLAY_LIBRARY == before

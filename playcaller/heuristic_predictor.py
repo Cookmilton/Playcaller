@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import dataclasses
 import random
 import re
@@ -812,7 +813,7 @@ class HeuristicPredictor(Predictor):
         if not candidates:
             return {"name": f"[No plays defined for {family}]", "why": ""}
         if len(candidates) == 1:
-            return candidates[0]
+            return copy.deepcopy(candidates[0])
 
         bucket = self.get_bucket(ctx)
 
@@ -845,7 +846,7 @@ class HeuristicPredictor(Predictor):
             )
             for p in candidates
         ]
-        return rng.choices(candidates, weights=weights, k=1)[0]
+        return copy.deepcopy(rng.choices(candidates, weights=weights, k=1)[0])
 
     def coverage_note(self, play: Dict[str, Any], ctx: GameContext) -> Optional[str]:
         if ctx.coverage_shell in ("cover_0", "cover_1"):
