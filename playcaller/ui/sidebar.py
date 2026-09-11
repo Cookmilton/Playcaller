@@ -3,22 +3,16 @@
 from __future__ import annotations
 
 import html
-import json
-import logging
 import os
 import streamlit as st
-
-from football_history_warehouse.ingest.from_json import ingest_espn_summary_after_live_fetch
 
 from playcaller import (
     DRIVE_END_UI_LABELS,
     DRIVE_END_UI_OPTIONS,
     DriveLogger,
     Game,
-    game_from_dict,
     game_to_json,
 )
-from playcaller.evaluation.snap_review_lifecycle import ensure_snap_review_list_on_game
 from playcaller.session_game_metadata import game_json_export_hint_caption, session_metadata_warnings
 from playcaller.game import (
     DRIVE_END_FIELD_GOAL,
@@ -32,8 +26,6 @@ from playcaller.game import (
 )
 from playcaller.live_data import (
     EspnFootballProvider,
-    SyncOptions,
-    apply_snapshot,
     list_espn_scoreboard_games,
     session_mark_manual,
 )
@@ -44,7 +36,7 @@ from playcaller.live_data.drive_display import (
 )
 from playcaller.live_data.espn_football import fetch_event_teams
 from playcaller.live_data.espn_game_date import game_date_mismatch_warning
-from playcaller.game_situation_input import clamp_quarter_clock_seconds, period_display_label
+from playcaller.game_situation_input import period_display_label
 from playcaller.services.game_controller import (
     apply_and_rerun,
     archive_current_drive_and_reset_session,
@@ -54,14 +46,11 @@ from playcaller.services.game_controller import (
     request_rerun_after_widgets,
     undo_last_logged_play,
 )
+from playcaller.services.live_feed_sync import request_live_sync
+from playcaller.streamlit_state.load_game import request_load_game_json
 from playcaller.streamlit_state.keys import (
     DEFENSE_LOOK_ORIGIN,
     GAME_CLOCK_TOTAL_SECONDS,
-    GAME_PERIOD,
-    GAME_QUARTER_CLOCK_MINS,
-    GAME_QUARTER_CLOCK_SECS,
-    GAME_SCORE_OURS,
-    GAME_SCORE_THEIRS,
     SESSION_SETUP_GAME_DATE,
     SESSION_SETUP_GAME_LABEL,
     SESSION_SETUP_IS_SIMULATED,
@@ -84,6 +73,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_MANUAL_EVENT_TEAMS,
     LIVE_FEED_SCOREBOARD_ROWS,
     LIVE_FEED_TEAM_SCOPE,
+    LOAD_GAME_ERROR,
     PENDING_END_DRIVE_UI,
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
@@ -100,7 +90,6 @@ from playcaller.streamlit_state.widget_backend_bridge import (
     GAME_DOWN_ALLOWED_VALUES,
     GAME_TIMEOUTS_ALLOWED_VALUES,
     GAME_YARDLINE_RANGE,
-    request_widget_hydrate_from_backend,
 )
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
 from playcaller.streamlit_state.possession import (
@@ -150,8 +139,6 @@ from playcaller.ui.sidebar_presets import (
     render_custom_presets_subsection,
 )
 from playcaller.ui.warehouse_sidebar import render_sidebar_warehouse_section, render_warehouse_advanced_panel
-
-logger = logging.getLogger(__name__)
 
 
 def _mark_board_manual() -> None:
@@ -241,68 +228,21 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             )
             c_load, c_new = st.columns(2)
             with c_load:
-                load_clicked = st.button(
+                st.button(
                     "Load JSON",
                     use_container_width=True,
                     type="primary",
                     key="sidebar_btn_load_game_json",
                     disabled=up is None,
+                    on_click=request_load_game_json,
                 )
             with c_new:
                 new_clicked = st.button(
                     "New game", use_container_width=True, type="secondary", key="sidebar_btn_new_game_top"
                 )
-            if load_clicked and up is not None:
-                try:
-                    raw = up.getvalue().decode("utf-8")
-                except UnicodeDecodeError:
-                    st.error("That file is not valid UTF-8 text.")
-                else:
-                    try:
-                        payload = json.loads(raw)
-                    except json.JSONDecodeError as e:
-                        st.error(f"Invalid JSON (parse error): {e}")
-                    else:
-                        if not isinstance(payload, dict):
-                            st.error('JSON root must be an object (e.g. { "game_id": ... }).')
-                        else:
-                            try:
-                                g_load = game_from_dict(payload)
-                                ensure_snap_review_list_on_game(g_load)
-                                st.session_state.game = g_load
-                            except (TypeError, ValueError, KeyError) as e:
-                                st.error(f"JSON shape not compatible with a saved game: {e}")
-                            except Exception as e:
-                                st.error(f"Could not restore game: {e}")
-                            else:
-                                g0 = st.session_state.game
-                                gq = max(1, min(5, int(getattr(g0, "quarter", 1) or 1)))
-                                raw_clk = int(getattr(g0, "clock_seconds_remaining", 0) or 0)
-                                sec = clamp_quarter_clock_seconds(gq, raw_clk)
-                                st.session_state[GAME_PERIOD] = gq
-                                st.session_state[GAME_QUARTER_CLOCK_MINS] = sec // 60
-                                st.session_state[GAME_QUARTER_CLOCK_SECS] = sec % 60
-                                st.session_state[GAME_SCORE_OURS] = int(g0.offense_points)
-                                st.session_state[GAME_SCORE_THEIRS] = int(g0.defense_points)
-                                request_widget_hydrate_from_backend(st.session_state)
-                                st.session_state[PENDING_END_DRIVE_UI] = {
-                                    "ui_possession_side": possession_side_radio_label(
-                                        possession=g0.possession
-                                    ),
-                                }
-                                drive_log.reset()
-                                st.session_state.result = None
-                                st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
-                                st.session_state.last_play_summary = ""
-                                clear_in_progress_log_state(st.session_state)
-                                clear_live_feed_session_keys(st.session_state)
-                                clear_coached_team_espn_session_identity(st.session_state)
-                                aud = getattr(g0, "recommendation_audit", None) or []
-                                mx = max((int(r.get("drive_epoch", 0)) for r in aud), default=-1)
-                                st.session_state.eval_drive_epoch = mx + 1
-                                st.session_state[PENDING_SESSION_SETUP_HYDRATE] = True
-                                st.toast("Loaded game from JSON.")
-                                request_rerun_after_widgets()
+            load_err = st.session_state.get(LOAD_GAME_ERROR)
+            if load_err:
+                st.error(str(load_err))
             if new_clicked:
                 st.session_state.pop(PENDING_END_DRIVE_UI, None)
                 st.session_state.pop(PENDING_LOG_SITUATION, None)
@@ -661,77 +601,19 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     "unless you choose **Both teams**."
                 ),
             )
-            do_sync = st.button(
+            st.button(
                 "Sync from ESPN",
                 use_container_width=True,
                 type="primary",
                 key="sidebar_live_sync",
                 disabled=not sync_ready.can_sync,
+                on_click=request_live_sync,
             )
             if st.button("Mark manual", use_container_width=True, type="secondary", key="sidebar_live_mark_manual"):
                 session_mark_manual(st.session_state)
                 request_rerun_after_widgets()
             if not sync_ready.can_sync and sync_ready.block_reason:
                 st.caption(f"**Sync unavailable:** {sync_ready.block_reason}")
-            if do_sync:
-                if not sync_ready.can_sync:
-                    st.session_state[LIVE_FEED_LAST_ERROR] = sync_ready.block_reason or "Sync is not ready yet."
-                    st.error(st.session_state[LIVE_FEED_LAST_ERROR])
-                else:
-                    sport = str(st.session_state.ui_live_espn_sport)
-                    prov = EspnFootballProvider(sport)  # type: ignore[arg-type]
-                    fr = prov.fetch_snapshot(sync_ready.event_id, our_team_id=sync_ready.our_team_id)
-                    if not fr.ok or fr.snapshot is None:
-                        st.session_state[LIVE_FEED_LAST_ERROR] = fr.error or "Fetch failed."
-                        st.error(st.session_state[LIVE_FEED_LAST_ERROR])
-                    else:
-                        st.session_state[LIVE_FEED_LAST_ERROR] = None
-                        st.session_state[LIVE_FEED_HTTP_INSECURE_WARNING] = bool(
-                            fr.used_insecure_ssl_fallback
-                        )
-                        opts = SyncOptions(
-                            lock_situation=bool(st.session_state.ui_live_lock_situation),
-                            lock_score=bool(st.session_state.ui_live_lock_score),
-                            auto_append_feed_plays=bool(st.session_state.ui_live_auto_plays),
-                            import_completed_feed_drives=bool(
-                                st.session_state[UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES]
-                            ),
-                            import_current_feed_drive_plays=bool(
-                                st.session_state[UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS]
-                            ),
-                        )
-                        res = apply_snapshot(
-                            game=game,
-                            session=st.session_state,
-                            drive_log=drive_log,
-                            snapshot=fr.snapshot,
-                            options=opts,
-                        )
-                        wh_ingest = None
-                        if fr.raw_summary:
-                            try:
-                                wh_ingest = ingest_espn_summary_after_live_fetch(
-                                    fr.raw_summary,
-                                    sport=sport,
-                                )
-                            except Exception as exc:
-                                logger.warning(
-                                    "Warehouse minimal ingest after ESPN sync failed: %s",
-                                    exc,
-                                    exc_info=True,
-                                )
-                        extra = []
-                        if res.plays_appended:
-                            extra.append(f"+{res.plays_appended} feed plays")
-                        if res.drives_imported:
-                            extra.append(f"+{res.drives_imported} completed drives")
-                        if wh_ingest is not None:
-                            extra.append(
-                                "warehouse "
-                                + ("game row created" if wh_ingest.was_new else "game row updated")
-                            )
-                        st.toast(res.message + (f" · {' · '.join(extra)}" if extra else ""))
-                        request_rerun_after_widgets()
             err = st.session_state.get(LIVE_FEED_LAST_ERROR)
             if err:
                 st.warning(str(err))

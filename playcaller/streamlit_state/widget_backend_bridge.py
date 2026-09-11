@@ -229,6 +229,12 @@ def sync_widgets_from_backend(ss: MutableMapping[str, Any]) -> None:
 
 def sync_backend_from_widgets(ss: MutableMapping[str, Any]) -> None:
     """Copy operator-facing widgets into backend mirrors (feed / export consistency)."""
+    if ss.get(GAME_WIDGET_HYDRATE_PENDING):
+        logger.warning(
+            "playcaller: sync_backend_from_widgets ran while GAME_WIDGET_HYDRATE_PENDING is still "
+            "set — ui_* would overwrite feed/load game_* (C.5 clobber). Skip the copy."
+        )
+        return
     for gk, uk in GAME_UI_MIRROR_PAIRS:
         if uk in ss:
             ss[gk] = ss[uk]
@@ -249,7 +255,7 @@ def reconcile_widget_and_backend_state(ss: MutableMapping[str, Any]) -> None:
 
 
 def request_widget_hydrate_from_backend(ss: MutableMapping[str, Any]) -> None:
-    """Backend writers call this, then ``st.rerun()``; next run reconciles before widgets."""
+    """Backend writers set this so the next reconcile (same run if pre-widget) copies ``game_*`` → ``ui_*``."""
     ss[GAME_WIDGET_HYDRATE_PENDING] = True
 
 

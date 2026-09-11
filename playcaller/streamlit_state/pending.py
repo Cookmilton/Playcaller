@@ -111,11 +111,15 @@ def apply_pending_scoreboard_status(ss: MutableMapping[str, Any]) -> None:
 
 def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     """
-    Single entrypoint: quick-log advance → end-drive clock/possession → new-game full reset
-    → session-setup hydrate → ESPN session date → scoreboard status label.
+    Single entrypoint: load-JSON → quick-log advance → end-drive clock/possession →
+    new-game full reset → session-setup hydrate → ESPN session date → scoreboard status.
 
     Order matters when multiple buffers are present (last writer wins on overlapping keys).
+    Load JSON runs first so it can queue possession/session-setup pendings for this same call.
     """
+    from playcaller.streamlit_state.load_game import apply_pending_load_game
+
+    apply_pending_load_game(ss)
     apply_pending_log_situation(ss)
     apply_pending_end_drive_ui(ss)
     apply_pending_new_game_ui(ss)

@@ -149,3 +149,32 @@ def test_pending_scoreboard_status_refreshes_row_detail():
     apply_all_pending(ss)
     assert ss[LIVE_FEED_SCOREBOARD_ROWS][0]["detail"] == "1st Quarter 8:12"
     assert PENDING_SCOREBOARD_STATUS not in ss
+
+
+def test_apply_pending_load_game_writes_score_mirrors():
+    from playcaller.game import Game, game_to_dict
+    from playcaller.state import DriveLogger
+    from playcaller.streamlit_state.keys import (
+        GAME_PERIOD,
+        GAME_SCORE_OURS,
+        GAME_SCORE_THEIRS,
+        PENDING_LOAD_GAME,
+    )
+    from playcaller.streamlit_state.pending import apply_all_pending
+
+    g = Game.new_game()
+    g.offense_points = 21
+    g.defense_points = 17
+    g.quarter = 4
+    ss: dict = {
+        "drive_log": DriveLogger(),
+        "game": Game.new_game(),
+        "ui_score_ours": 0,
+        PENDING_LOAD_GAME: game_to_dict(g),
+    }
+    apply_all_pending(ss)
+    assert ss[GAME_SCORE_OURS] == 21
+    assert ss[GAME_SCORE_THEIRS] == 17
+    assert ss[GAME_PERIOD] == 4
+    assert PENDING_LOAD_GAME not in ss
+    assert ss["game"].offense_points == 21

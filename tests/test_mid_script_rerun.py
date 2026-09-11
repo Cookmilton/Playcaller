@@ -103,7 +103,7 @@ def test_mark_manual_keeps_unmirrored(seeded_unmirrored: AppTest) -> None:
 def test_sync_keeps_unmirrored(seeded_unmirrored: AppTest, monkeypatch: pytest.MonkeyPatch) -> None:
     """Feed hydrate may change territory/down/score; defense look and mode must stay."""
     monkeypatch.setattr(
-        "playcaller.ui.sidebar.EspnFootballProvider.fetch_snapshot",
+        "playcaller.services.live_feed_sync.EspnFootballProvider.fetch_snapshot",
         _fake_espn_fetch,
     )
     at = seeded_unmirrored

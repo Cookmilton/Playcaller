@@ -74,7 +74,7 @@ def _click(at: AppTest, key: str) -> None:
 def leftover_app(monkeypatch: pytest.MonkeyPatch) -> tuple[AppTest, _QueuedEspnFetch]:
     summary, scoreboard = _base_payloads()
     fake = _QueuedEspnFetch([summary, _leftover_summary(summary), _leftover_summary(summary)], scoreboard)
-    monkeypatch.setattr("playcaller.ui.sidebar.EspnFootballProvider.fetch_snapshot", fake)
+    monkeypatch.setattr("playcaller.services.live_feed_sync.EspnFootballProvider.fetch_snapshot", fake)
     _reset_streamlit_dg_stack()
     at = AppTest.from_file(APP_FILE, default_timeout=180)
     at.session_state[LIVE_FEED_SCOREBOARD_ROWS] = SCOREBOARD_ROWS

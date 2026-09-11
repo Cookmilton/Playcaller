@@ -38,6 +38,12 @@ PENDING_SESSION_GAME_DATE = "pending_session_game_date"
 PENDING_SESSION_GAME_DATE_REPLACE = "pending_session_game_date_replace"
 # Patch ``live_feed_scoreboard_rows[].detail`` from snapshot status before the Game selectbox.
 PENDING_SCOREBOARD_STATUS = "pending_scoreboard_status"
+# Load-JSON payload applied before widgets (see ``streamlit_state.load_game``).
+PENDING_LOAD_GAME = "pending_load_game"
+LOAD_GAME_ERROR = "load_game_error"
+# Sync button / polling: fetch+apply at the top of the script, then hydrate.
+LIVE_SYNC_REQUESTED = "live_sync_requested"
+LIVE_SYNC_TOAST = "live_sync_toast"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
 # treats ``st.rerun()`` as a completed run and drops widget keys that never instantiated.
 PENDING_RERUN_AFTER_WIDGETS = "pending_rerun_after_widgets"

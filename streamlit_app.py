@@ -74,6 +74,7 @@ from playcaller.services.game_controller import (
     maybe_rerun_after_widgets,
     sync_wind_slider_with_weather_pre_widgets,
 )
+from playcaller.services.live_feed_sync import run_requested_live_sync
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     GAME_CONTEXT_QUARTER,
@@ -135,11 +136,18 @@ if __name__ == "__main__":
     # widgets onto ``game`` before sidebar, export, ESPN, or audit paths read ``session_metadata``.
     _init_session_state()
 
+    toast = run_requested_live_sync(st.session_state)
+
     # Merge pending UI before any ``key="ui_*"`` widgets render (Streamlit forbids mutating widget keys mid-run).
     apply_all_pending(st.session_state)
     # ``game_*`` backend mirrors ↔ ``ui_*`` (hydrate after ESPN / load JSON, else push widgets → backend).
     reconcile_widget_and_backend_state(st.session_state)
     log_development_mirror_audit()
+    load_toast = st.session_state.pop("_load_game_toast", None)
+    if toast:
+        st.toast(toast)
+    elif load_toast:
+        st.toast(str(load_toast))
 
     predictor = st.session_state.predictor
     drive_log = st.session_state.drive_log
