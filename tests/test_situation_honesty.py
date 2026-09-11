@@ -14,11 +14,14 @@ from playcaller.ui.situation_honesty import (
     SOURCE_CHIP_LAST_PLAY,
     SOURCE_CHIP_MANUAL,
     SOURCE_CHIP_NOT_SET,
+    SOURCE_CHIP_PRESET,
     SOURCE_CHIP_SCOREBOARD,
     UNKNOWN_POSSESSION_TEXT,
     build_situation_honesty,
+    defense_look_chip_label,
     generate_blocked_reason,
     honesty_from_session,
+    leftover_feed_drive_caption,
     skipped_situation_reasons,
     situation_source_chip_label,
     unsynced_board_warning,
@@ -183,3 +186,15 @@ def test_local_time_labels_include_timezone() -> None:
     assert len(parts) >= 2
     assert stamp.split()[-1] == parts[-1]
     assert "-" in stamp
+
+
+def test_defense_look_chip_is_preset_or_manual_never_espn() -> None:
+    assert defense_look_chip_label(None) == SOURCE_CHIP_PRESET
+    assert defense_look_chip_label("preset") == SOURCE_CHIP_PRESET
+    assert defense_look_chip_label("manual") == SOURCE_CHIP_MANUAL
+    assert defense_look_chip_label("feed") == SOURCE_CHIP_PRESET
+
+
+def test_leftover_feed_drive_caption() -> None:
+    assert leftover_feed_drive_caption({"skipped": ["previous feed drive still open in DriveLogger"]})
+    assert leftover_feed_drive_caption({"skipped": []}) is None

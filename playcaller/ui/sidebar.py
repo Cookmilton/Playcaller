@@ -54,6 +54,7 @@ from playcaller.services.game_controller import (
     undo_last_logged_play,
 )
 from playcaller.streamlit_state.keys import (
+    DEFENSE_LOOK_ORIGIN,
     GAME_CLOCK_TOTAL_SECONDS,
     GAME_PERIOD,
     GAME_QUARTER_CLOCK_MINS,
@@ -139,6 +140,7 @@ from playcaller.ui.product_copy import (
     SIDEBAR_SECTION_REVIEW_EXPORT_EXPANDER,
 )
 from playcaller.ui.local_time import format_synced_hhmm
+from playcaller.ui.situation_honesty import leftover_feed_drive_caption
 from playcaller.ui.sidebar_presets import (
     builtin_opp35_active,
     builtin_own25_active,
@@ -154,6 +156,10 @@ logger = logging.getLogger(__name__)
 def _mark_board_manual() -> None:
     """Widget ``on_change``: operator edited a board field (not a hydrate)."""
     session_mark_manual(st.session_state)
+
+
+def _mark_defense_manual() -> None:
+    st.session_state[DEFENSE_LOOK_ORIGIN] = "manual"
 
 
 def _bind_ui(k: str) -> None:
@@ -299,7 +305,10 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 st.session_state.pop(PENDING_NEW_GAME_UI, None)
                 st.session_state.game = Game.new_game()
                 drive_log.reset()
-                st.session_state[PENDING_NEW_GAME_UI] = new_game_ui_values()
+                st.session_state[PENDING_NEW_GAME_UI] = {
+                    **new_game_ui_values(),
+                    DEFENSE_LOOK_ORIGIN: "preset",
+                }
                 st.session_state.result = None
                 st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
                 st.session_state.last_play_summary = ""
@@ -728,6 +737,9 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 line = f"Synced **{format_synced_hhmm(float(ts))}** · {origin}"
                 st.caption(line)
             aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
+            leftover = leftover_feed_drive_caption(aud)
+            if leftover:
+                st.caption(leftover)
             if aud:
                 with st.expander("ℹ️ Full last sync detail", expanded=False):
                     so = aud.get("sync_options")
@@ -920,6 +932,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                         ui_safeties="single_high",
                         ui_blitz_likely=False,
                         ui_auto_generate=True,
+                        **{DEFENSE_LOOK_ORIGIN: "preset"},
                     )
             with fcols[1]:
                 if st.button("Dime · 6 · Qtrs", use_container_width=True, key="sidebar_chip_def_dime_6_qtrs"):
@@ -930,6 +943,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                         ui_safeties="two_high",
                         ui_blitz_likely=False,
                         ui_auto_generate=True,
+                        **{DEFENSE_LOOK_ORIGIN: "preset"},
                     )
 
             fcols2 = st.columns(2)
@@ -942,6 +956,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                         ui_safeties="single_high",
                         ui_blitz_likely=True,
                         ui_auto_generate=True,
+                        **{DEFENSE_LOOK_ORIGIN: "preset"},
                     )
             with fcols2[1]:
                 if st.button("Clear defense read", use_container_width=True, key="sidebar_chip_def_clear_read"):
@@ -952,6 +967,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                         ui_safeties="unknown",
                         ui_blitz_likely=False,
                         ui_auto_generate=True,
+                        **{DEFENSE_LOOK_ORIGIN: "preset"},
                     )
 
             st.markdown("**Generate play call**")
@@ -1140,21 +1156,31 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     ["unknown", "nickel", "base", "dime", "goal_line"],
                     format_func=lambda x: x.replace("_", " ").title(),
                     key="ui_def_personnel",
+                    on_change=_mark_defense_manual,
                 )
-                st.slider("Box count", 4, 9, key="ui_box_count", format="%d in box")
+                st.slider(
+                    "Box count",
+                    4,
+                    9,
+                    key="ui_box_count",
+                    format="%d in box",
+                    on_change=_mark_defense_manual,
+                )
                 st.selectbox(
                     "Coverage",
                     ["unknown", "cover_0", "cover_1", "cover_2", "cover_3", "cover_4", "quarters"],
                     format_func=lambda x: x.replace("_", " ").upper() if x != "unknown" else "Unknown",
                     key="ui_coverage_shell",
+                    on_change=_mark_defense_manual,
                 )
                 st.selectbox(
                     "Safeties",
                     ["unknown", "single_high", "two_high"],
                     format_func=lambda x: x.replace("_", " ").title(),
                     key="ui_safeties",
+                    on_change=_mark_defense_manual,
                 )
-                st.toggle("Blitz expected", key="ui_blitz_likely")
+                st.toggle("Blitz expected", key="ui_blitz_likely", on_change=_mark_defense_manual)
                 _bind_ui("ui_def_personnel")
                 _bind_ui("ui_box_count")
                 _bind_ui("ui_coverage_shell")

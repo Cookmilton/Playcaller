@@ -20,6 +20,8 @@ from playcaller.session_game_metadata import (
     session_metadata_warnings,
 )
 from playcaller.streamlit_state.keys import (
+    DEFENSE_LOOK_ORIGIN,
+    LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_LAST_SYNC_EPOCH,
     UNDO_BUNDLE,
@@ -34,10 +36,12 @@ from playcaller.ui.helpers import (
 from playcaller.ui.product_copy import EXPANDER_SESSION_RECORD, HEADLINE_LIVE_CONSOLE, HEADLINE_MAIN
 from playcaller.ui.recommendations import render_recommendation_panel
 from playcaller.ui.situation_honesty import (
+    defense_look_chip_label,
     down_distance_html,
     honest_field_html,
     honest_summary_line,
     honesty_from_session,
+    leftover_feed_drive_caption,
     source_chip_html,
     timeouts_html,
 )
@@ -188,6 +192,7 @@ def render_main_content(
     saf_hud = safeties.replace("_", " ").title() if safeties != "unknown" else "S ?"
     blitz_chip = " · BLITZ" if blitz_likely else ""
     def_strip = html.escape(f"{def_lbl} · {box_count} box · {cov_hud} · {saf_hud}{blitz_chip}", quote=True)
+    def_chip = source_chip_html(defense_look_chip_label(st.session_state.get(DEFENSE_LOOK_ORIGIN)))
     st.markdown(
         f'<div style="background:linear-gradient(180deg,#0c1222 0%,#0f172a 100%);border:1px solid #334155;'
         f'border-radius:10px;padding:14px 18px;margin-bottom:6px">'
@@ -198,7 +203,7 @@ def render_main_content(
         f'{source_chip_html(honesty.source_chip)}</div>'
         f'<div style="margin-top:6px;font-size:0.92rem;color:#cbd5e1">'
         f'<strong style="color:#94a3b8">To goal</strong> {ytg_html}'
-        f' &nbsp;·&nbsp; <strong style="color:#94a3b8">Defense</strong> {def_strip}</div>'
+        f' &nbsp;·&nbsp; <strong style="color:#94a3b8">Defense</strong> {def_strip} {def_chip}</div>'
         f'<div style="margin-top:8px;font-size:0.95rem;color:#94a3b8;line-height:1.5">'
         f'<strong style="color:#e2e8f0">Score</strong> {sc_lbl} '
         f'<span style="color:#475569">(margin {margin_lbl})</span>'
@@ -219,6 +224,9 @@ def render_main_content(
     )
     for cap in honesty.reason_captions():
         st.caption(cap)
+    leftover = leftover_feed_drive_caption(st.session_state.get(LIVE_FEED_LAST_AUDIT))
+    if leftover:
+        st.caption(leftover)
     if st.session_state.get("last_play_summary"):
         st.markdown(
             '<p style="font-size:0.88rem;color:#94a3b8;margin:0.35rem 0 0 0;line-height:1.35">'

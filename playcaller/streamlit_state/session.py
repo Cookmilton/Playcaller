@@ -21,6 +21,7 @@ from playcaller.streamlit_state.session_setup import ensure_session_setup_widget
 from playcaller.possession import possession_side_radio_label
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.keys import (
+    DEFENSE_LOOK_ORIGIN,
     GAME_CLOCK_TOTAL_SECONDS,
     GAME_CONTEXT_QUARTER,
     HV_CORPUS_SOURCE,
@@ -179,6 +180,8 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
         ss["ui_live_home_or_away"] = "away"
     if LIVE_FEED_LAST_ORIGIN not in ss:
         ss[LIVE_FEED_LAST_ORIGIN] = None
+    if DEFENSE_LOOK_ORIGIN not in ss:
+        ss[DEFENSE_LOOK_ORIGIN] = "preset"
     if "eval_drive_epoch" not in ss:
         ss["eval_drive_epoch"] = 0
     if UI_PREVIOUS_DRIVES_FILTER not in ss:

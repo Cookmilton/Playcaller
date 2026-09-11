@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 from playcaller.game_situation_input import format_ball_spot, format_down_distance
+from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN
 from playcaller.streamlit_state.possession import (
     GENERATE_OPPONENT_REASON,
     ORIGIN_FEED,
@@ -31,6 +32,7 @@ SOURCE_CHIP_SCOREBOARD = "ESPN live"
 SOURCE_CHIP_LAST_PLAY = "ESPN last play"
 SOURCE_CHIP_MANUAL = "Manual"
 SOURCE_CHIP_NOT_SET = "Not set"
+SOURCE_CHIP_PRESET = "Preset"
 
 _SKIP_REASON_CAPTION = {
     "no_situation_source": "no live situation in this sync",
@@ -98,6 +100,23 @@ def skipped_situation_reasons(audit: Any) -> dict[str, str]:
         if field and reason:
             out[field] = reason
     return out
+
+
+def leftover_feed_drive_caption(audit: Any) -> Optional[str]:
+    """Console copy when sync left the previous ESPN drive open in DriveLogger."""
+    if not isinstance(audit, Mapping):
+        return None
+    for entry in audit.get("skipped") or []:
+        if entry == PREVIOUS_FEED_DRIVE_OPEN:
+            return PREVIOUS_FEED_DRIVE_OPEN
+    return None
+
+
+def defense_look_chip_label(origin: Any) -> str:
+    """Personnel/box/coverage/safeties are never ESPN-observed — Preset or Manual only."""
+    if str(origin or "").strip() == ORIGIN_MANUAL:
+        return SOURCE_CHIP_MANUAL
+    return SOURCE_CHIP_PRESET
 
 
 def situation_source_chip_label(*, origin: str, situation_source: Optional[str]) -> str:
