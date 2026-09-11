@@ -197,4 +197,7 @@ def test_defense_look_chip_is_preset_or_manual_never_espn() -> None:
 
 def test_leftover_feed_drive_caption() -> None:
     assert leftover_feed_drive_caption({"skipped": ["previous feed drive still open in DriveLogger"]})
+    assert "End drive" in leftover_feed_drive_caption(
+        {"skipped": ["previous feed drive still open in DriveLogger"]}
+    )
     assert leftover_feed_drive_caption({"skipped": []}) is None

@@ -108,7 +108,10 @@ def leftover_feed_drive_caption(audit: Any) -> Optional[str]:
         return None
     for entry in audit.get("skipped") or []:
         if entry == PREVIOUS_FEED_DRIVE_OPEN:
-            return PREVIOUS_FEED_DRIVE_OPEN
+            return (
+                "Previous feed drive still open in DriveLogger. "
+                "End drive to archive it — the new ESPN drive will not merge until you do."
+            )
     return None
 
 

@@ -10,6 +10,7 @@ from playcaller import FootballPlayPredictor, Game, GameContext, DriveLogger, fo
 from playcaller.game_situation_input import format_clock_left_in_quarter
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
 from playcaller.services.game_controller import (
+    archive_current_drive_and_reset_session,
     request_rerun_after_widgets,
     run_generate_if_requested,
     undo_last_logged_play,
@@ -26,6 +27,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_SYNC_EPOCH,
     UNDO_BUNDLE,
 )
+from playcaller.streamlit_state.possession import end_drive_blocked_reason
 from playcaller.ui.helpers import (
     fmt_local_epoch,
     net_yards_to_endzone,
@@ -127,6 +129,25 @@ def render_main_content(
     )
 
     st.markdown(f"##### {HEADLINE_LIVE_CONSOLE}")
+    leftover = leftover_feed_drive_caption(st.session_state.get(LIVE_FEED_LAST_AUDIT))
+    if leftover:
+        left, right = st.columns([3, 1])
+        with left:
+            st.warning(leftover)
+        with right:
+            end_block = end_drive_blocked_reason(game.possession)
+            if st.button(
+                "End drive",
+                type="primary",
+                use_container_width=True,
+                key="main_console_end_leftover_drive",
+                disabled=bool(end_block) or not drive_log.results,
+                help="Archive the open DriveLogger series so the new ESPN drive can merge.",
+            ):
+                archive_current_drive_and_reset_session()
+                request_rerun_after_widgets()
+            if end_block:
+                st.caption(end_block)
     op1, op2, op3 = st.columns([2, 1, 1])
     with op1:
         main_generate = st.button(
@@ -224,9 +245,6 @@ def render_main_content(
     )
     for cap in honesty.reason_captions():
         st.caption(cap)
-    leftover = leftover_feed_drive_caption(st.session_state.get(LIVE_FEED_LAST_AUDIT))
-    if leftover:
-        st.caption(leftover)
     if st.session_state.get("last_play_summary"):
         st.markdown(
             '<p style="font-size:0.88rem;color:#94a3b8;margin:0.35rem 0 0 0;line-height:1.35">'
