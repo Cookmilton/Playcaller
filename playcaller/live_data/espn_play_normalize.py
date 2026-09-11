@@ -523,6 +523,12 @@ def apply_espn_feed_presnap_fields(ap: ActualPlayResult, play: Dict[str, Any]) -
                 kw[attr] = int(v)
             except (TypeError, ValueError):
                 pass
+    seq = play.get("sequenceNumber")
+    if seq is not None:
+        try:
+            kw["feed_sequence_number"] = int(str(seq).strip())
+        except (TypeError, ValueError):
+            pass
     if not kw:
         return ap
     return replace(ap, **kw)

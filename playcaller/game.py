@@ -151,6 +151,8 @@ class Drive:
     feed_team_display_name: str = ""
     # ESPN drive-level metadata (see :class:`DriveFeedAuditSnapshot`); ``None`` for manual archives.
     feed_audit: Optional["DriveFeedAuditSnapshot"] = None
+    # Session snap-review counter at **End drive** (stable across ``game.drives`` re-sort). None for ESPN import.
+    session_drive_epoch: Optional[int] = None
 
     def with_computed_stats(
         self,
@@ -202,6 +204,25 @@ class Game:
             game_id=str(uuid.uuid4())[:8],
             session_metadata=fresh_session_metadata_dict(),
         )
+
+
+def drive_index_for_session_epoch(game: Game, epoch: int) -> Optional[int]:
+    """
+    List index of the archived drive tagged with ``session_drive_epoch``.
+
+    After E2 re-sort, ``epoch`` is not a list position. When no drive is tagged
+    (legacy JSON), fall back to treating ``epoch`` as an index.
+    """
+    drives = game.drives or []
+    tagged = [i for i, d in enumerate(drives) if d.session_drive_epoch is not None]
+    if tagged:
+        for i in tagged:
+            if drives[i].session_drive_epoch == int(epoch):
+                return i
+        return None
+    if 0 <= int(epoch) < len(drives):
+        return int(epoch)
+    return None
 
 
 def _fmt_drive_clock(seconds: int) -> str:
@@ -430,8 +451,18 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         feed_team_abbr=str(d.get("feed_team_abbr") or ""),
         feed_team_display_name=str(d.get("feed_team_display_name") or ""),
         feed_audit=_drive_feed_audit_from_dict(d.get("feed_audit")),
+        session_drive_epoch=_json_opt_session_epoch(d.get("session_drive_epoch")),
     )
     return out
+
+
+def _json_opt_session_epoch(raw: Any) -> Optional[int]:
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def game_to_dict(game: Game) -> Dict[str, Any]:
@@ -478,6 +509,8 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             row["feed_team_display_name"] = dr.feed_team_display_name
         if dr.feed_audit:
             row["feed_audit"] = asdict(dr.feed_audit)
+        if dr.session_drive_epoch is not None:
+            row["session_drive_epoch"] = int(dr.session_drive_epoch)
         payload["drives"].append(row)
     return payload
 

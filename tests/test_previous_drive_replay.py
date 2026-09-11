@@ -213,14 +213,37 @@ def test_cached_comparison_rows_reuses_session_bucket() -> None:
     assert len(bucket) == 1
 
 
+def test_comparison_cache_survives_list_index_change() -> None:
+    """Re-sort must not attach cached replay rows to a different drive."""
+    g = Game()
+    g.game_id = "cache_identity"
+    play_a = ActualPlayResult(
+        family="inside_zone", play_type="run", yards_gained=3, external_play_id="A1"
+    )
+    play_b = ActualPlayResult(
+        family="quick_game", play_type="pass", yards_gained=8, external_play_id="B1"
+    )
+    dr_a = Drive(plays=[play_a], possessing_team="offense")
+    dr_b = Drive(plays=[play_b], possessing_team="defense")
+    ambient = GameContext(down=1, distance=10, yardline=25, territory="own")
+    pred = FootballPlayPredictor()
+    ss: dict = {}
+    first = cached_comparison_rows_for_archived_drive(
+        ss, drive=dr_a, drive_index=0, game=g, ambient_ctx=ambient, predictor=pred, plays=dr_a.plays
+    )
+    cached_comparison_rows_for_archived_drive(
+        ss, drive=dr_b, drive_index=1, game=g, ambient_ctx=ambient, predictor=pred, plays=dr_b.plays
+    )
+    after_move = cached_comparison_rows_for_archived_drive(
+        ss, drive=dr_a, drive_index=1, game=g, ambient_ctx=ambient, predictor=pred, plays=dr_a.plays
+    )
+    assert after_move is first
+
+
 def test_cached_comparison_rows_prunes_session_bucket_fifo() -> None:
     """Long sessions should not grow ``ARCHIVED_DRIVE_COMPARISON_ROWS_CACHE`` without bound."""
     g = Game()
     g.game_id = "fifo_prune_test"
-    dr = Drive(
-        plays=[ActualPlayResult(family="inside_zone", play_type="run", yards_gained=3)],
-        possessing_team="offense",
-    )
     ambient = GameContext(down=1, distance=10, yardline=25, territory="own")
     pred = FootballPlayPredictor()
     ss: dict = {}
@@ -232,6 +255,17 @@ def test_cached_comparison_rows_prunes_session_bucket_fifo() -> None:
     ):
         n = _MAX_ARCHIVED_DRIVE_COMPARISON_CACHE_ENTRIES + 7
         for drive_index in range(n):
+            dr = Drive(
+                plays=[
+                    ActualPlayResult(
+                        family="inside_zone",
+                        play_type="run",
+                        yards_gained=3,
+                        external_play_id=f"p{drive_index}",
+                    )
+                ],
+                possessing_team="offense",
+            )
             cached_comparison_rows_for_archived_drive(
                 ss,
                 drive=dr,

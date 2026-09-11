@@ -95,41 +95,66 @@ def matching_completed_drive_for_open_log(
     return best
 
 
+def parse_espn_sequence_number(raw: Any) -> Optional[int]:
+    """ESPN ``plays[].sequenceNumber`` as int, or None when missing/unparseable (never raises)."""
+    if raw is None:
+        return None
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def archived_drive_identity_key(drive: Any) -> str:
+    """Stable cache/review key: first ESPN play id, else session epoch, else object id."""
+    ids = espn_play_ids_from_plays(getattr(drive, "plays", None))
+    if ids:
+        return "espnplay:" + min(ids)
+    epoch = getattr(drive, "session_drive_epoch", None)
+    if epoch is not None:
+        return f"epoch:{int(epoch)}"
+    return f"obj:{id(drive)}"
+
+
 def archived_drive_feed_sequence(drive: Any) -> Optional[int]:
-    """Sort key: first-play ``sequenceNumber`` when present, else min numeric ESPN play id."""
+    """
+    First-known ESPN ``sequenceNumber`` on the drive.
+
+    Manual drives (no sequence on any play) return ``None`` so the sort keeps their
+    list slot while ESPN-keyed neighbors permute among ESPN slots. Play ids are not
+    used — they are not sequence numbers and must not invent an order.
+    """
     plays = getattr(drive, "plays", None) or []
     seqs: list[int] = []
-    pids: list[int] = []
     for play in plays:
         raw_seq = getattr(play, "feed_sequence_number", None)
         if raw_seq is None and isinstance(play, Mapping):
             raw_seq = play.get("sequenceNumber") or play.get("feed_sequence_number")
-        if raw_seq is not None:
-            try:
-                seqs.append(int(str(raw_seq).strip()))
-            except (TypeError, ValueError):
-                pass
-        pid = str(getattr(play, "external_play_id", None) or "").strip()
-        if pid.isdigit():
-            pids.append(int(pid))
+        parsed = parse_espn_sequence_number(raw_seq)
+        if parsed is not None:
+            seqs.append(parsed)
     if seqs:
         return min(seqs)
-    if pids:
-        return min(pids)
     return None
 
 
 def sort_game_drives_by_feed_sequence(game: Game) -> None:
-    """Order ``game.drives`` by ESPN sequence, not insertion time. Manual drives keep relative order after ESPN rows."""
-    indexed = list(enumerate(game.drives or []))
-    if not indexed:
+    """
+    Order ESPN-keyed drives in ``game.drives`` by ``sequenceNumber``.
+
+    Drives with no sequence (manual / operator-only) keep their current list slots.
+    ESPN drives are a stable sort among those slots: ``(sequenceNumber, original index)``.
+    ``None`` is never compared, so the sort cannot TypeError.
+    """
+    drives = list(game.drives or [])
+    if not drives:
         return
-
-    def _key(item: tuple[int, Any]) -> tuple[int, int, int]:
-        i, dr = item
-        seq = archived_drive_feed_sequence(dr)
-        if seq is None:
-            return (1, i, i)
-        return (0, seq, i)
-
-    game.drives = [dr for _, dr in sorted(indexed, key=_key)]
+    seqs = [archived_drive_feed_sequence(dr) for dr in drives]
+    espn_slots = [i for i, seq in enumerate(seqs) if seq is not None]
+    if not espn_slots:
+        return
+    espn_order = sorted(espn_slots, key=lambda i: (seqs[i], i))
+    out = list(drives)
+    for slot, src in zip(espn_slots, espn_order):
+        out[slot] = drives[src]
+    game.drives = out

@@ -19,7 +19,7 @@ from playcaller.evaluation.metrics import (
     actual_fields_is_explosive,
     actual_fields_is_turnover,
 )
-from playcaller.game import Game
+from playcaller.game import Game, drive_index_for_session_epoch
 from playcaller.history.normalize import derive_field_zone, derive_yardline_100
 from playcaller.ui.review_helpers import format_clock_line, format_scrimmage_line, humanize_situation_bucket
 
@@ -330,9 +330,10 @@ class DriveReviewSummary:
 
 
 def _game_drive_headline(game: Game, drive_epoch: int) -> Optional[str]:
-    if drive_epoch < 0 or drive_epoch >= len(game.drives):
+    di = drive_index_for_session_epoch(game, drive_epoch)
+    if di is None:
         return None
-    dr = game.drives[drive_epoch].result
+    dr = game.drives[di].result
     if dr is None:
         return None
     return f"{dr.headline} — {dr.detail_line}"

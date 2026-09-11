@@ -101,6 +101,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
             possessing_team=possessing,
             **override_kw,
         )
+        finished.session_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0))
         apply_scoring_after_drive(g, finished)
         flip_possession_after_drive(g, finished)
         g.drives.append(finished)

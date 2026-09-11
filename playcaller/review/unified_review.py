@@ -16,7 +16,7 @@ from playcaller.actual_result import (
     format_actual_play_operator_headline,
 )
 from playcaller.domain import PASS_FAMILIES, RUN_FAMILIES, ActualPlayResult
-from playcaller.game import Game
+from playcaller.game import Game, drive_index_for_session_epoch
 from playcaller.play_event_segment import PlayEventSegment, segment_from_actual
 from playcaller.live_data.drive_display import (
     PREVIOUS_DRIVES_FILTER_BOTH,
@@ -364,15 +364,14 @@ def build_unified_rows_from_audit(
             sub_parts.append(f"{conf:.0%} conf")
         model_sub = " · ".join(sub_parts) if sub_parts else model_head
 
+        di = drive_index_for_session_epoch(game, de)
         dr_kind = None
-        if 0 <= de < len(game.drives):
-            res = game.drives[de].result
+        side: Optional[str] = None
+        if di is not None:
+            res = game.drives[di].result
             if res is not None:
                 dr_kind = str(res.kind or "")
-
-        side: Optional[str] = None
-        if 0 <= de < len(game.drives):
-            side = classify_drive_team_side(game.drives[de], our_coached_espn_id=our_coached_espn_id)
+            side = classify_drive_team_side(game.drives[di], our_coached_espn_id=our_coached_espn_id)
 
         tags = (
             _mismatch_heuristics(
@@ -394,7 +393,7 @@ def build_unified_rows_from_audit(
             UnifiedReviewRow(
                 review_mode=mode,
                 audit_index=i,
-                drive_id=de,
+                drive_id=de if di is None else di,
                 play_index_on_drive=play_i,
                 team_side=side,
                 pre_snap=pre,

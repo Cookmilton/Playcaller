@@ -256,3 +256,90 @@ def test_archived_drives_order_by_espn_sequence_not_insertion() -> None:
     )
     assert x_idx < z_idx
     _assert_unique(_espn_ids(dl, game))
+
+
+def _drive_with(*, seq: int | None, pid: str = "", epoch: int | None = None) -> object:
+    from playcaller.game import Drive
+
+    plays = []
+    if seq is not None or pid:
+        plays = [
+            ActualPlayResult(
+                family="inside_zone",
+                play_type="run",
+                yards_gained=1,
+                external_play_id=pid or None,
+                feed_sequence_number=seq,
+            )
+        ]
+    return Drive(plays=plays, possessing_team="offense", session_drive_epoch=epoch)
+
+
+def test_sort_uses_sequence_number_not_play_id() -> None:
+    from playcaller.game import Game
+    from playcaller.live_data.drive_boundaries import sort_game_drives_by_feed_sequence
+
+    late_id_early_seq = _drive_with(seq=10, pid="999")
+    early_id_late_seq = _drive_with(seq=50, pid="001")
+    game = Game(drives=[late_id_early_seq, early_id_late_seq])
+    sort_game_drives_by_feed_sequence(game)
+    assert game.drives[0] is late_id_early_seq
+    assert game.drives[1] is early_id_late_seq
+
+
+def test_manual_drive_keeps_middle_slot() -> None:
+    from playcaller.game import Game
+    from playcaller.live_data.drive_boundaries import sort_game_drives_by_feed_sequence
+
+    espn_late = _drive_with(seq=90, pid="z")
+    manual = _drive_with(seq=None, epoch=7)
+    espn_early = _drive_with(seq=10, pid="a")
+    game = Game(drives=[espn_late, manual, espn_early])
+    sort_game_drives_by_feed_sequence(game)
+    assert game.drives[0] is espn_early
+    assert game.drives[1] is manual
+    assert game.drives[2] is espn_late
+
+
+def test_sort_does_not_raise_on_missing_sequence() -> None:
+    from playcaller.game import Game
+    from playcaller.live_data.drive_boundaries import sort_game_drives_by_feed_sequence
+
+    game = Game(drives=[_drive_with(seq=None), _drive_with(seq=3, pid="p")])
+    sort_game_drives_by_feed_sequence(game)
+
+
+def test_re_sort_does_not_move_review_or_comparison_identity() -> None:
+    from playcaller.game import Game, DriveResult, drive_index_for_session_epoch
+    from playcaller.live_data.drive_boundaries import (
+        archived_drive_identity_key,
+        sort_game_drives_by_feed_sequence,
+    )
+    from playcaller.review.derived import _game_drive_headline
+    from playcaller.review.unified_review import ReviewMode, build_unified_rows_from_audit
+
+    coached = _drive_with(seq=80, pid="coached", epoch=0)
+    coached.result = DriveResult(kind="punt", headline="Coached punt", detail_line="3 plays")
+    imported = _drive_with(seq=10, pid="imported")
+    imported.result = DriveResult(kind="touchdown", headline="Import TD", detail_line="1 play")
+    game = Game(drives=[coached, imported])
+    marker = archived_drive_identity_key(coached)
+    game.recommendation_audit = [
+        {
+            "status": "closed",
+            "drive_epoch": 0,
+            "plays_at_recommend": 0,
+            "pre_snap": {"down": 1, "distance": 10, "yardline": 25, "territory": "own"},
+            "selected_family": "inside_zone",
+            "linked_actual": {"family": "inside_zone", "play_type": "run", "yards_gained": 1},
+        }
+    ]
+    sort_game_drives_by_feed_sequence(game)
+    assert game.drives[0] is imported
+    assert game.drives[1] is coached
+    assert archived_drive_identity_key(coached) == marker
+    assert drive_index_for_session_epoch(game, 0) == 1
+    assert _game_drive_headline(game, 0) == "Coached punt — 3 plays"
+    rows = build_unified_rows_from_audit(game, game.recommendation_audit, ReviewMode.TRUE_STORED)
+    assert rows[0].drive_id == 1
+    assert rows[0].drive_result_kind == "punt"

@@ -18,6 +18,7 @@ from playcaller.actual_result import (
     format_actual_play_operator_headline,
 )
 from playcaller.game import Drive
+from playcaller.live_data.drive_boundaries import archived_drive_identity_key
 from playcaller.situation import advance_game_state_after_actual
 from playcaller.state import DriveLogger
 
@@ -536,16 +537,18 @@ def plays_list_fingerprint(plays: Sequence[ActualPlayResult]) -> str:
 def comparison_rows_cache_key(
     *,
     game: Game,
-    drive_index: int,
     predictor: FootballPlayPredictor,
     ambient_ctx: GameContext,
     plays: Sequence[ActualPlayResult],
+    drive: Optional[Drive] = None,
+    drive_index: int = 0,
 ) -> str:
     gid = str(getattr(game, "game_id", "") or id(game))
+    identity = archived_drive_identity_key(drive) if drive is not None else str(int(drive_index))
     return ":".join(
         [
             gid,
-            str(int(drive_index)),
+            identity,
             predictor_replay_cache_token(predictor),
             ambient_replay_overlay_fingerprint(ambient_ctx),
             plays_list_fingerprint(plays),
@@ -566,7 +569,7 @@ def cached_comparison_rows_for_archived_drive(
     """
     Session-scoped memo for ``comparison_rows_for_archived_drive`` (Streamlit reruns).
 
-    Keyed by game id, drive index, predictor class, replay overlay fingerprint, and a play-list fingerprint.
+    Keyed by game id, stable drive identity (not list index), predictor class, overlay, and plays.
     """
     from playcaller.streamlit_state.keys import ARCHIVED_DRIVE_COMPARISON_ROWS_CACHE
 
@@ -577,10 +580,11 @@ def cached_comparison_rows_for_archived_drive(
 
     cache_key = comparison_rows_cache_key(
         game=game,
-        drive_index=drive_index,
+        drive=drive,
         predictor=predictor,
         ambient_ctx=ambient_ctx,
         plays=plays,
+        drive_index=drive_index,
     )
     hit = bucket.get(cache_key)
     if isinstance(hit, list) and all(isinstance(x, ActualVsReplayComparisonRow) for x in hit):

@@ -121,6 +121,8 @@ class ActualPlayResult:
     feed_presnap_goal_down: bool = False
     feed_home_score: Optional[int] = None
     feed_away_score: Optional[int] = None
+    # ESPN ``plays[].sequenceNumber`` when imported from feed (drive sort). None for manual rows.
+    feed_sequence_number: Optional[int] = None
 
 
 # Backwards-compatible name for drive logging (same shape as ``ActualPlayResult``).
