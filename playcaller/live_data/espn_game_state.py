@@ -171,6 +171,8 @@ def _infer_period_from_detail_blob(blob: str) -> Optional[int]:
 def resolve_espn_clock_seconds(
     payload: Dict[str, Any],
     status: Dict[str, Any],
+    *,
+    is_final: bool = False,
 ) -> Tuple[Optional[int], Tuple[str, ...], Optional[ClockResolutionSource]]:
     """
     Resolve time remaining in the **current period** (0–900 for regulation).
@@ -178,7 +180,8 @@ def resolve_espn_clock_seconds(
     Fallback order (first hit wins):
     1. ``status.displayClock``
     2. Numeric ``status.clock`` / ``displayClockSeconds`` when clearly seconds-in-period
-    3. Leading ``(M:SS)`` on the most recent play description(s)
+    3. Leading ``(M:SS)`` on the most recent play description(s) — **not** on Final
+       (play text is a last snap, not end-of-game 0:00)
 
     Returns ``(seconds, debug_notes, resolution_source)`` where ``resolution_source`` is
     ``None`` only when no clock could be resolved.
@@ -193,6 +196,13 @@ def resolve_espn_clock_seconds(
     if num is not None:
         notes.append("clock: from numeric status.clock / displayClockSeconds (seconds in period).")
         return num, tuple(notes), "numeric_status"
+
+    if is_final:
+        notes.append(
+            "clock: unknown on Final — ESPN omitted displayClock; clock not updated this sync."
+        )
+        logger.warning("ESPN summary: Final with no displayClock; not using play-text clock.")
+        return None, tuple(notes), None
 
     for text, src in _iter_play_texts_with_source_newest_first(payload):
         hit = parse_clock_from_play_text(text)

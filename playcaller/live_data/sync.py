@@ -18,6 +18,8 @@ SITUATION_FIELDS: Tuple[str, ...] = (
     "own_timeouts",
     "opp_timeouts",
 )
+# Period / remaining clock — not situation-block fields; still honest skip-or-apply.
+CLOCK_BOARD_FIELDS: Tuple[str, ...] = ("quarter", "clock")
 
 # Reasons attached to a skipped situation field.
 SKIP_LOCKED = "locked"
@@ -140,6 +142,8 @@ def apply_snapshot(
         session[GAME_PERIOD] = q
         game.quarter = context_quarter_from_period(q)
         applied.append("quarter")
+    else:
+        _skip_field(skipped, "quarter", SKIP_ABSENT_IN_SOURCE)
 
     if snapshot.clock_seconds_in_period is not None:
         period = int(session.get(GAME_PERIOD, session.get("ui_game_period", 1)))
@@ -155,6 +159,11 @@ def apply_snapshot(
                 "epoch": float(snapshot.fetched_at_epoch),
                 "source": snapshot.clock_resolution,
             }
+    elif snapshot.is_final:
+        _skip_field(skipped, "clock", SKIP_ABSENT_IN_SOURCE)
+        debug_notes_extra.append(
+            "clock: Final with no ESPN clock — not applying a prior reading or a default."
+        )
     elif not options.lock_situation and any("clock: unknown" in str(x) for x in (snapshot.debug_notes or ())):
         trusted = session.get(LIVE_FEED_TRUSTED_CLOCK)
         period_now = int(snapshot.quarter) if snapshot.quarter is not None else int(session.get(GAME_PERIOD, 1))
@@ -189,9 +198,12 @@ def apply_snapshot(
                     period_now,
                 )
         if not used_trusted:
+            _skip_field(skipped, "clock", SKIP_ABSENT_IN_SOURCE)
             logger.warning(
                 "Live feed sync: clock not updated (unknown in ESPN payload); UI quarter clock may stay at prior values."
             )
+    else:
+        _skip_field(skipped, "clock", SKIP_ABSENT_IN_SOURCE)
 
     has_situation = snapshot.situation_source is not None
 

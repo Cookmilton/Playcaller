@@ -206,6 +206,8 @@ def render_recommendation_panel(
         yardline=int(ctx.yardline),
         own_timeouts=int(ctx.own_timeouts),
         opp_timeouts=int(ctx.opp_timeouts),
+        period=int(ctx.quarter),
+        seconds_in_quarter=int(ctx.seconds_remaining),
     )
     if honesty.unsynced_board_warning:
         st.warning(honesty.unsynced_board_warning)
