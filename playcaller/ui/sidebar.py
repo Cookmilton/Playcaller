@@ -50,6 +50,7 @@ from playcaller.services.game_controller import (
     on_ui_weather_changed,
     preset_snap_only,
     preset_two_minute_drill,
+    request_rerun_after_widgets,
     undo_last_logged_play,
 )
 from playcaller.streamlit_state.keys import (
@@ -291,7 +292,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                                 st.session_state.eval_drive_epoch = mx + 1
                                 st.session_state[PENDING_SESSION_SETUP_HYDRATE] = True
                                 st.toast("Loaded game from JSON.")
-                                st.rerun()
+                                request_rerun_after_widgets()
             if new_clicked:
                 st.session_state.pop(PENDING_END_DRIVE_UI, None)
                 st.session_state.pop(PENDING_LOG_SITUATION, None)
@@ -307,7 +308,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 clear_live_feed_session_keys(st.session_state)
                 clear_coached_team_espn_session_identity(st.session_state)
                 st.session_state[PENDING_SESSION_SETUP_HYDRATE] = True
-                st.rerun()
+                request_rerun_after_widgets()
 
         st.divider()
 
@@ -476,7 +477,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                         st.session_state[LIVE_FEED_MANUAL_EVENT_FETCH_ERROR] = None
                         st.session_state[LIVE_FEED_MANUAL_EVENT_LAST_ATTEMPT_ID] = ""
                         st.session_state[LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR] = ""
-                        st.rerun()
+                        request_rerun_after_widgets()
 
                 st.toggle(
                     "Auto-fetch when Event ID looks complete (9+ digits)",
@@ -538,7 +539,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                             st.session_state[LIVE_FEED_MANUAL_EVENT_FOR_ID] = ""
                             st.session_state[LIVE_FEED_MANUAL_EVENT_FETCH_ERROR] = f"Unexpected: {exc}"
                     st.session_state[LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR] = eid_cur.strip()
-                    st.rerun()
+                    request_rerun_after_widgets()
 
                 st.session_state[LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR] = cursor_next
 
@@ -656,7 +657,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             )
             if st.button("Mark manual", use_container_width=True, type="secondary", key="sidebar_live_mark_manual"):
                 session_mark_manual(st.session_state)
-                st.rerun()
+                request_rerun_after_widgets()
             if not sync_ready.can_sync and sync_ready.block_reason:
                 st.caption(f"**Sync unavailable:** {sync_ready.block_reason}")
             if do_sync:
@@ -717,7 +718,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                                 + ("game row created" if wh_ingest.was_new else "game row updated")
                             )
                         st.toast(res.message + (f" · {' · '.join(extra)}" if extra else ""))
-                        st.rerun()
+                        request_rerun_after_widgets()
             err = st.session_state.get(LIVE_FEED_LAST_ERROR)
             if err:
                 st.warning(str(err))
@@ -972,7 +973,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 key="sidebar_undo_last_play",
             ):
                 undo_last_logged_play()
-                st.rerun()
+                request_rerun_after_widgets()
 
         st.divider()
 
@@ -993,7 +994,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 disabled=bool(end_block),
             ):
                 archive_current_drive_and_reset_session()
-                st.rerun()
+                request_rerun_after_widgets()
 
             st.caption("**One-tap end** (overrides the dropdown for that archive only):")
             er1, er2, er3 = st.columns(3)
@@ -1005,7 +1006,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_UI_AUTO)
-                    st.rerun()
+                    request_rerun_after_widgets()
                 if st.button(
                     "End · Punt",
                     use_container_width=True,
@@ -1013,7 +1014,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_PUNT)
-                    st.rerun()
+                    request_rerun_after_widgets()
                 if st.button(
                     "End · TD",
                     use_container_width=True,
@@ -1021,7 +1022,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TOUCHDOWN)
-                    st.rerun()
+                    request_rerun_after_widgets()
             with er2:
                 if st.button(
                     "End · FG",
@@ -1030,7 +1031,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL)
-                    st.rerun()
+                    request_rerun_after_widgets()
                 if st.button(
                     "End · FG miss",
                     use_container_width=True,
@@ -1038,7 +1039,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL_MISS)
-                    st.rerun()
+                    request_rerun_after_widgets()
                 if st.button(
                     "End · INT",
                     use_container_width=True,
@@ -1046,7 +1047,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_INT)
-                    st.rerun()
+                    request_rerun_after_widgets()
             with er3:
                 if st.button(
                     "End · Fum",
@@ -1055,7 +1056,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_FUMBLE)
-                    st.rerun()
+                    request_rerun_after_widgets()
                 if st.button(
                     "End · TOD",
                     use_container_width=True,
@@ -1063,7 +1064,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     disabled=bool(end_block),
                 ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_ON_DOWNS)
-                    st.rerun()
+                    request_rerun_after_widgets()
 
             st.selectbox(
                 "When you use **End drive & next** (not the one-tap row):",

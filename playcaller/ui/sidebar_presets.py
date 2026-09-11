@@ -8,7 +8,12 @@ from typing import Any, Mapping, MutableMapping
 
 import streamlit as st
 
-from playcaller.services.game_controller import apply_and_rerun, preset_snap_only, preset_two_minute_drill
+from playcaller.services.game_controller import (
+    apply_and_rerun,
+    preset_snap_only,
+    preset_two_minute_drill,
+    request_rerun_after_widgets,
+)
 from playcaller.streamlit_state.keys import GAME_CLOCK_TOTAL_SECONDS
 
 CUSTOM_PRESETS_SS_KEY = "sidebar_custom_snap_presets_v1"
@@ -125,7 +130,7 @@ def render_custom_presets_subsection() -> None:
             }
         )
         ss[CUSTOM_PRESETS_SS_KEY] = presets
-        st.rerun()
+        request_rerun_after_widgets()
 
     edit_id = str(ss.get(PRESET_EDIT_ID_SS_KEY) or "").strip()
 
@@ -177,19 +182,19 @@ def render_custom_presets_subsection() -> None:
                         ss[CUSTOM_PRESETS_SS_KEY] = presets
                         ss[PRESET_EDIT_ID_SS_KEY] = ""
                         ss.pop(f"sidebar_pedit_seeded_{pid}", None)
-                        st.rerun()
+                        request_rerun_after_widgets()
                 with b2:
                     if st.button("Cancel", use_container_width=True, key=f"sidebar_preset_cancel_{pid}"):
                         ss[PRESET_EDIT_ID_SS_KEY] = ""
                         ss.pop(f"sidebar_pedit_seeded_{pid}", None)
-                        st.rerun()
+                        request_rerun_after_widgets()
                 with b3:
                     if st.button("Delete", use_container_width=True, key=f"sidebar_preset_del_{pid}"):
                         presets.pop(i)
                         ss[CUSTOM_PRESETS_SS_KEY] = presets
                         ss[PRESET_EDIT_ID_SS_KEY] = ""
                         ss.pop(f"sidebar_pedit_seeded_{pid}", None)
-                        st.rerun()
+                        request_rerun_after_widgets()
             continue
 
         c1, c2 = st.columns([0.82, 0.18])
@@ -208,4 +213,4 @@ def render_custom_presets_subsection() -> None:
                     if isinstance(k, str) and k.startswith("sidebar_pedit_seeded_"):
                         ss.pop(k, None)
                 _prime_edit_fields(ss, entry)
-                st.rerun()
+                request_rerun_after_widgets()

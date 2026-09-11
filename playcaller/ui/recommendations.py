@@ -30,6 +30,7 @@ from playcaller.streamlit_state.keys import (
     UNDO_BUNDLE,
     WAREHOUSE_HISTORICAL_SIGNAL,
 )
+from playcaller.services.game_controller import request_rerun_after_widgets
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
 from playcaller.ui.historical_signal import render_historical_signal_panel
 from playcaller.ui.helpers import (
@@ -549,7 +550,7 @@ def render_recommendation_panel(
                 summary, toast_parts = post_log_summary_and_toast(actual, snap)
                 st.session_state.last_play_summary = summary
                 st.toast(" · ".join(toast_parts))
-                st.rerun()
+                request_rerun_after_widgets()
 
             st.markdown("**Auto / mixed (uses Advanced dropdown if not overridden)**")
             a1, a2, a3, a4, a5, a6, a7, a8 = st.columns(8)

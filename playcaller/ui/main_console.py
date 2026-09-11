@@ -9,7 +9,11 @@ import streamlit as st
 from playcaller import FootballPlayPredictor, Game, GameContext, DriveLogger, format_actual_play_result_description
 from playcaller.game_situation_input import format_clock_left_in_quarter
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
-from playcaller.services.game_controller import run_generate_if_requested, undo_last_logged_play
+from playcaller.services.game_controller import (
+    request_rerun_after_widgets,
+    run_generate_if_requested,
+    undo_last_logged_play,
+)
 from playcaller.session_game_metadata import (
     compact_session_summary_line,
     session_metadata_is_identified,
@@ -145,7 +149,7 @@ def render_main_content(
 
     if undo_clicked:
         undo_last_logged_play()
-        st.rerun()
+        request_rerun_after_widgets()
 
     run_generate_if_requested(
         ctx=ctx,

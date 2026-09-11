@@ -234,8 +234,16 @@ def sync_wind_slider_with_weather_pre_widgets() -> None:
 
 
 def on_ui_weather_changed() -> None:
+    """Zero wind on the *next* run — do not write ``ui_wind_mph`` here.
+
+    The weather selectbox is instantiated immediately before the wind slider
+    (``sidebar.py``). Streamlit 1.56 still treats ``ui_wind_mph`` as bound when
+    this ``on_change`` fires, so a same-run write trips the widget-key guard.
+    ``sync_wind_slider_with_weather_pre_widgets`` runs before widgets and
+    applies the zero.
+    """
     if str(st.session_state.get("ui_weather", "clear")) != "wind":
-        assign_session_state(st.session_state, "ui_wind_mph", 0, context="on_ui_weather_changed")
+        request_rerun_after_widgets()
 
 
 def resolve_historical_plays_for_generate(ss: MutableMapping[str, Any]) -> Optional[Any]:
