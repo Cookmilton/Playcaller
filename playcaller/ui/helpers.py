@@ -54,9 +54,9 @@ def net_yards_to_endzone(territory: str, yardline: int) -> int:
 
 
 def fmt_local_epoch(ts: float) -> str:
-    from playcaller.ui.local_time import format_local_epoch_labeled
+    from playcaller.ui.local_time import format_local_epoch_labeled_viewer
 
-    return format_local_epoch_labeled(ts)
+    return format_local_epoch_labeled_viewer(ts)
 
 
 def ordinal_down(n: int) -> str:
