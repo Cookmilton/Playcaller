@@ -30,6 +30,8 @@ UI_DRIVE_AUDIT_FOCUS_CHRON = "ui_drive_audit_focus_chron"
 PENDING_LOG_SITUATION = "pending_log_situation"
 PENDING_END_DRIVE_UI = "pending_end_drive_ui"
 PENDING_NEW_GAME_UI = "pending_new_game_ui"
+# Queue ``hydrate_session_setup_widgets`` for the next run (before those widgets instantiate).
+PENDING_SESSION_SETUP_HYDRATE = "pending_session_setup_hydrate"
 
 # --- Snap / undo (not pending dicts; cleared with in-progress log helpers) ---
 LAST_DRIVE_SNAP_CONTEXT = "last_drive_snap_context"
@@ -47,7 +49,7 @@ GAME_TERRITORY = "game_territory"
 GAME_YARDLINE = "game_yardline"
 GAME_OWN_TOS = "game_own_tos"
 GAME_OPP_TOS = "game_opp_tos"
-# Same labels as ``ui_possession_side`` ("Our team" | "Opponent").
+# Same labels as ``ui_possession_side`` ("Not set" | "Our team" | "Opponent").
 GAME_POSSESSION_SIDE = "game_possession_side"
 # Set when backend updates require copying ``game_*`` → ``ui_*`` on the *next* run (before widgets).
 GAME_WIDGET_HYDRATE_PENDING = "game_widget_hydrate_pending"
@@ -62,6 +64,8 @@ LIVE_FEED_SCOREBOARD_ROWS = "live_feed_scoreboard_rows"
 LIVE_FEED_MERGED_ESPN_DRIVE_KEYS = "live_feed_merged_espn_drive_keys"
 LIVE_FEED_SEEN_PLAY_IDS = "live_feed_seen_play_ids"
 LIVE_FEED_LAST_POSSESSION_TEAM_ID = "live_feed_last_possession_team_id"
+# Last ESPN ``drives.current.id`` applied; seen-play-id reset keys on this, not board possession.
+LIVE_FEED_LAST_CURRENT_DRIVE_ID = "live_feed_last_current_drive_id"
 # Persists the operator's **Our team** ESPN id for the current session/game; survives ``clear_live_feed_session_keys``.
 LIVE_FEED_COACHED_TEAM_ESPN_ID = "live_feed_coached_team_espn_id"
 # Which ESPN feed possessions enter the session: ``our`` | ``opponent`` | ``both`` (see ``drive_display`` constants).

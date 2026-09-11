@@ -53,8 +53,14 @@ from playcaller.warehouse.binding import build_warehouse_binding
 from playcaller.services.predictor_with_history import get_recommendation_with_history
 from football_history_warehouse.consumer import try_client_from_env
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
+from playcaller.streamlit_state.possession import (
+    end_drive_blocked_reason,
+    generate_blocked_reason_for_possession,
+    generate_skip_debug_reason,
+    mark_board_origin_manual,
+    possession_side_radio_label,
+)
 from playcaller.game_situation_input import context_quarter_from_period
-from playcaller.streamlit_state.session import possession_side_radio_label
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
 
 
@@ -64,7 +70,14 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
 
     ``end_kind_override``: explicit ``DRIVE_END_*`` kind, or ``None`` / ``DRIVE_END_UI_AUTO`` to use the
     sidebar **How this drive ends** selector (or full auto-inference when that is Auto).
+
+    Sole choke point for every **End drive** affordance, including the one-tap row: archiving
+    with unset possession would file the drive under our offense via ``_norm_possessing_team``.
     """
+    blocked = end_drive_blocked_reason(st.session_state.game.possession)
+    if blocked:
+        st.warning(blocked)
+        return
     dl = st.session_state.drive_log
     if dl.results:
         snap_ctx = st.session_state.get(LAST_DRIVE_SNAP_CONTEXT) or {}
@@ -102,7 +115,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
             "ui_score_ours": int(g.offense_points),
             "ui_score_theirs": int(g.defense_points),
             "ui_possession_side": possession_side_radio_label(
-                possession=str(g.possession)
+                possession=g.possession
             ),
         }
     g = st.session_state.game
@@ -118,6 +131,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
 def apply_and_rerun(**kwargs: Any) -> None:
     for k, v in kwargs.items():
         assign_session_state(st.session_state, k, v, context="apply_and_rerun")
+    mark_board_origin_manual(st.session_state)
     st.rerun()
 
 
@@ -261,8 +275,21 @@ def run_generate_if_requested(
             ui_auto_generate=bool(st.session_state.ui_auto_generate),
         )
         return
-    # Always mutate the canonical in-session ``Game`` (local ``game`` can diverge if sidebar replaced session state).
     canon = st.session_state.game
+    skip_reason = generate_skip_debug_reason(canon.possession)
+    if skip_reason is not None:
+        merge_streamlit_snap_review_debug(
+            st.session_state,
+            event="generate_skipped",
+            reason=skip_reason,
+            sidebar_generate=bool(sidebar_generate),
+            main_generate=bool(main_generate),
+            ui_auto_generate=bool(st.session_state.ui_auto_generate),
+            generate_blocked=generate_blocked_reason_for_possession(canon.possession),
+        )
+        assign_session_state(st.session_state, "ui_auto_generate", False, context="run_generate_if_requested")
+        return
+    # Always mutate the canonical in-session ``Game`` (local ``game`` can diverge if sidebar replaced session state).
     ensure_snap_review_list_on_game(canon)
     hist_plays = resolve_historical_plays_for_generate(st.session_state)
     wh_adv = bool(st.session_state.get(UI_WAREHOUSE_ADVISORY_ENABLED))

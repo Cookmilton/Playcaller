@@ -82,6 +82,7 @@ from playcaller.streamlit_state.session import ensure_play_caller_session_defaul
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.ui_write_guard import reset_ui_write_guard
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
+from playcaller.streamlit_state.possession import apply_possession_from_ui
 from playcaller.streamlit_state.widget_backend_bridge import (
     log_development_mirror_audit,
     reconcile_widget_and_backend_state,
@@ -136,9 +137,7 @@ game = st.session_state.game
 ensure_snap_review_list_on_game(game)
 apply_session_setup_widgets_to_game(game, st.session_state)
 # Possession from the sidebar radio (prior run's value). Applied here so **New drive** / captions see it.
-game.possession = (
-    "offense" if str(st.session_state.get("ui_possession_side", "Our team")) == "Our team" else "defense"
-)
+apply_possession_from_ui(game, st.session_state)
 
 # Wind: sync before sidebar + ``on_change`` on weather when leaving "wind" (see ``game_controller``).
 sync_wind_slider_with_weather_pre_widgets()
@@ -151,9 +150,7 @@ game = st.session_state.game
 ensure_snap_review_list_on_game(game)
 drive_log = st.session_state.drive_log
 apply_session_setup_widgets_to_game(game, st.session_state)
-game.possession = (
-    "offense" if str(st.session_state.get("ui_possession_side", "Our team")) == "Our team" else "defense"
-)
+apply_possession_from_ui(game, st.session_state)
 
 # Copy operator edits into ``game_*`` (safe: only non-widget backend keys are written).
 sync_backend_from_widgets(st.session_state)

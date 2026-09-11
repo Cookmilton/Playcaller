@@ -22,6 +22,7 @@ from playcaller.streamlit_state.keys import (
     GAME_YARDLINE,
 )
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
+from playcaller.streamlit_state.possession import apply_possession_from_ui
 from playcaller.streamlit_state.widget_backend_bridge import refresh_derived_game_context_cache
 
 
@@ -39,9 +40,7 @@ def build_game_context_from_session_state(ss: MutableMapping[str, Any]) -> GameC
     drive_log: DriveLogger = ss["drive_log"]
     game: Game = ss["game"]
     apply_session_setup_widgets_to_game(game, ss)
-    game.possession = (
-        "offense" if str(ss.get("ui_possession_side", "Our team")) == "Our team" else "defense"
-    )
+    apply_possession_from_ui(game, ss)
 
     down = int(ss.get(GAME_DOWN, ss["ui_down"]))
     distance = int(ss.get(GAME_DISTANCE, ss["ui_distance"]))

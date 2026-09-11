@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 ClockResolutionSource = Literal["display_clock", "numeric_status", "play_text"]
+# Which ESPN block supplied the live situation (see ``playcaller.live_data.espn_situation``).
+SituationSource = Literal["scoreboard", "last_play_end"]
 
 from playcaller.domain import ActualPlayResult
 from playcaller.game import DriveFeedAuditSnapshot
@@ -42,6 +44,8 @@ class NormalizedGameSnapshot:
     status_detail: str
     quarter: Optional[int]
     clock_seconds_in_period: Optional[int]
+    # Situation fields are **raw** feed values (never clamped) so ``apply_snapshot`` can
+    # report an out-of-range field instead of silently coercing it.
     down: Optional[int]
     distance: Optional[int]
     abs_yards_from_own_goal: Optional[int]
@@ -60,8 +64,15 @@ class NormalizedGameSnapshot:
     completed_feed_drives: Tuple[FeedCompletedDrive, ...] = ()
     # Raw ``drives.current.plays`` JSON rows (full list) for in-progress merge into ``DriveLogger``.
     current_feed_drive_plays: Tuple[Dict[str, Any], ...] = ()
+    # ``drives.current.id`` when ESPN provides it (seen-play-id reset is keyed on this, not board possession).
+    current_feed_drive_id: Optional[str] = None
     # ``drives.current.team.id`` when ESPN provides it (feed scope + merge diagnostics).
     current_feed_drive_team_espn_id: Optional[str] = None
+    # Which block supplied down / distance / field position / possession / timeouts.
+    # ``None`` means neither source had a situation this sync (see ``espn_situation``).
+    situation_source: Optional[SituationSource] = None
+    # Raw yards-to-opponent-goal behind ``abs_yards_from_own_goal`` (kept for range reporting).
+    yards_to_endzone: Optional[int] = None
 
 
 @dataclass
@@ -81,9 +92,15 @@ class SyncResult:
 
     ok: bool
     applied_fields: List[str] = field(default_factory=list)
-    skipped_reasons: List[str] = field(default_factory=list)
+    # Section-level skips are strings; per-field situation skips are
+    # ``{"field": ..., "reason": ...}`` dicts (see ``sync.SITUATION_FIELDS``).
+    skipped_reasons: List[Any] = field(default_factory=list)
     plays_appended: int = 0
     drives_imported: int = 0
+    completed_drive_plays_imported: int = 0
     current_drive_plays_merged: int = 0
+    drive_log_rows_before: int = 0
+    drive_log_rows_after: int = 0
+    situation_source: Optional[SituationSource] = None
     message: str = ""
     error: Optional[str] = None

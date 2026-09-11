@@ -81,8 +81,30 @@ GAME_UI_MIRROR_PAIRS: tuple[tuple[str, str], ...] = (
     (GAME_POSSESSION_SIDE, "ui_possession_side"),
 )
 
+# Accepted values for the mirrored board fields whose widget is a ``selectbox``, bounded
+# ``slider``, or ``number_input``. Sidebar widgets import these (no duplicated literals).
+#
+# Streamlit 1.56 does not raise when a hydrated value falls outside a widget's domain — it
+# silently resets the widget to its default. Feed writers must reject out-of-domain values
+# instead of clamping them; see :func:`playcaller.live_data.sync.apply_snapshot`.
+GAME_DOWN_ALLOWED_VALUES: tuple[int, ...] = (1, 2, 3, 4)
+GAME_DISTANCE_MIN = 1
+GAME_DISTANCE_MAX = 99
+GAME_DISTANCE_RANGE: tuple[int, int] = (GAME_DISTANCE_MIN, GAME_DISTANCE_MAX)
+GAME_DISTANCE_ALLOWED_VALUES: tuple[int, ...] = tuple(range(GAME_DISTANCE_MIN, GAME_DISTANCE_MAX + 1))
+GAME_TIMEOUTS_ALLOWED_VALUES: tuple[int, ...] = (0, 1, 2, 3)
+GAME_YARDLINE_RANGE: tuple[int, int] = (1, 50)
+
+
+def distance_in_widget_domain(value: int) -> bool:
+    lo, hi = GAME_DISTANCE_RANGE
+    return lo <= int(value) <= hi
+
+
 # Every ``key="ui_…"`` in ``playcaller/ui/sidebar.py`` must appear here or in
-# ``UI_SIDEBAR_KEYS_WITHOUT_BACKEND_MIRROR``.
+# ``UI_SIDEBAR_KEYS_WITHOUT_BACKEND_MIRROR``. ``ui_possession_side`` is chip-backed
+# (no Streamlit ``key=``) so chip clicks cannot collect a default; keep it here
+# because it is still a GAME_UI_MIRROR_PAIRS ui key.
 SIDEBAR_UI_WIDGET_KEYS: frozenset[str] = frozenset(
     {
         "ui_possession_side",

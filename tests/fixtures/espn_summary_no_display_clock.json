@@ -29,13 +29,10 @@
         ],
         "status": {
           "period": 3,
-          "type": {"completed": false, "detail": "3rd Quarter"}
-        },
-        "situation": {
-          "down": 2,
-          "distance": 7,
-          "yardsToEndzone": 42,
-          "possession": "14"
+          "type": {
+            "completed": false,
+            "detail": "3rd Quarter"
+          }
         }
       }
     ]
@@ -46,7 +43,10 @@
       "plays": [
         {
           "id": "401test002p9",
-          "type": {"text": "Rush", "id": "5"},
+          "type": {
+            "text": "Rush",
+            "id": "5"
+          },
           "text": "(7:32) - 6 Yd Rush",
           "statYardage": 6
         }

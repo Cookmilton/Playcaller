@@ -225,6 +225,15 @@ def drive_epoch_first_indices(audit: Sequence[Mapping[str, Any]]) -> List[Tuple[
     return out
 
 
+def _possession_note(possession: Optional[str]) -> str:
+    """Session possession line; ``None`` is unknown, not the opponent."""
+    if possession == "offense":
+        return "Our offense"
+    if possession == "defense":
+        return "Opponent offense (session)"
+    return "Possession not set"
+
+
 def compute_review_overview(game: Game, audit: Sequence[Mapping[str, Any]], ev: Mapping[str, Any]) -> Dict[str, Any]:
     total_logged = sum(len(d.plays) for d in game.drives)
     n_drives = len(game.drives)
@@ -240,7 +249,7 @@ def compute_review_overview(game: Game, audit: Sequence[Mapping[str, Any]], ev: 
     return {
         "game_id": str(game.game_id),
         "score": f"{game.offense_points}–{game.defense_points}",
-        "possession_note": "Our offense" if game.possession == "offense" else "Opponent offense (session)",
+        "possession_note": _possession_note(game.possession),
         "total_drives": n_drives,
         "total_logged_plays": total_logged,
         "audit_rows": len(audit),

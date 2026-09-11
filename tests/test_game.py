@@ -71,7 +71,8 @@ def test_classify_field_goal_miss_from_result_type() -> None:
 
 def test_flip_possession_after_punt_drive() -> None:
     g = Game.new_game()
-    assert g.possession == "offense"
+    assert g.possession is None
+    g.possession = "offense"
     d = complete_drive_from_plays(
         [ActualPlayResult(yards_gained=3, family="inside_zone", play_type="run")],
         possessing_team="offense",

@@ -15,9 +15,13 @@ or inside a shared helper such as ``build_game_context_from_session_state`` (his
 Upload-only flows load ``game`` from a file and must **not** sync sidebar widgets onto
 ``st.session_state["game"]``.
 
-**Load / new game:** :func:`hydrate_session_setup_widgets` overwrites widget keys from the
-loaded or new ``Game`` (full replace). First visit only: :func:`ensure_session_setup_widget_defaults`
-fills missing widget keys from ``game`` without clobbering existing session state.
+**Load / new game:** queue ``PENDING_SESSION_SETUP_HYDRATE`` and let
+:func:`~playcaller.streamlit_state.pending.apply_all_pending` call
+:func:`hydrate_session_setup_widgets` before those widgets instantiate. Writing the
+keys in the same run as the **New game** / **Load JSON** click raises Streamlit 1.56
+``cannot be modified after the widget … is instantiated``. First visit only:
+:func:`ensure_session_setup_widget_defaults` fills missing widget keys from ``game``
+without clobbering existing session state.
 """
 
 from __future__ import annotations

@@ -7,6 +7,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
+    PENDING_SESSION_SETUP_HYDRATE,
     UNDO_BUNDLE,
 )
 from playcaller.streamlit_state.pending import (
@@ -20,6 +21,11 @@ from playcaller.streamlit_state.session import (
     clear_live_feed_session_keys,
     ensure_play_caller_session_defaults,
     possession_side_radio_label,
+)
+from playcaller.streamlit_state.possession import (
+    end_drive_blocked_reason,
+    generate_blocked_reason_for_possession,
+    possession_is_opponent,
 )
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.ui_write_guard import (
@@ -43,6 +49,7 @@ __all__ = [
     "PENDING_END_DRIVE_UI",
     "PENDING_LOG_SITUATION",
     "PENDING_NEW_GAME_UI",
+    "PENDING_SESSION_SETUP_HYDRATE",
     "UNDO_BUNDLE",
     "apply_all_pending",
     "apply_pending_end_drive_ui",
@@ -50,8 +57,11 @@ __all__ = [
     "apply_pending_new_game_ui",
     "clear_in_progress_log_state",
     "clear_live_feed_session_keys",
+    "end_drive_blocked_reason",
     "ensure_play_caller_session_defaults",
+    "generate_blocked_reason_for_possession",
     "new_game_ui_values",
+    "possession_is_opponent",
     "possession_side_radio_label",
     "assign_session_state",
     "development_mirror_audit_messages",

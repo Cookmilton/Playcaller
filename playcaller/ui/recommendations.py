@@ -45,7 +45,14 @@ from playcaller.ui.helpers import (
     post_log_summary_and_toast,
     safe_summary_html,
 )
+from playcaller.streamlit_state.possession import log_result_blocked_reason
+from playcaller.ui.situation_honesty import honesty_from_session
 from playcaller.ui_components import FAM_COLOR, FAM_LABEL, render_field, score_chart
+
+
+def recommendation_card_distance(board_ctx: GameContext) -> int:
+    """Board (synced/manual) distance — never ``normalize_context``'s 1–25 clamp."""
+    return int(board_ctx.distance)
 
 
 def _render_historical_context_note(result: dict) -> None:
@@ -189,12 +196,24 @@ def render_recommendation_panel(
     drive_log: DriveLogger,
     result: object,
 ) -> None:
+    honesty = honesty_from_session(
+        st.session_state,
+        possession=game.possession,
+        down=int(ctx.down),
+        distance=int(ctx.distance),
+        territory=str(ctx.territory),
+        yardline=int(ctx.yardline),
+        own_timeouts=int(ctx.own_timeouts),
+        opp_timeouts=int(ctx.opp_timeouts),
+    )
+    if honesty.unsynced_board_warning:
+        st.warning(honesty.unsynced_board_warning)
 
     left, right = st.columns([1,1], gap="large")
 
     with left:
         st.markdown("**Field position**")
-        display_ctx = result["ctx"] if result else ctx
+        display_ctx = ctx
         st.markdown(render_field(display_ctx), unsafe_allow_html=True)
         if result:
             bkt = result["bucket"].replace("_"," ").title()
@@ -288,13 +307,14 @@ def render_recommendation_panel(
 
             render_historical_signal_panel(st.session_state.get(WAREHOUSE_HISTORICAL_SIGNAL))
 
-            # Situation strip (read at a glance)
+            # Situation strip (read at a glance) — board distance, not the model's 1–25 clamp.
             ball = format_ball_spot(territory=fctx.territory, yardline=int(fctx.yardline))
             period_ui = int(st.session_state.get("ui_game_period", fctx.quarter))
             clk = format_clock_left_in_quarter(period=period_ui, seconds_in_quarter=int(fctx.seconds_remaining))
             cov_lbl = fctx.coverage_shell.replace("_", " ").upper() if fctx.coverage_shell != "unknown" else "Cov ?"
+            board_distance = recommendation_card_distance(ctx)
             st.caption(
-                f"{fctx.down}&{fctx.distance} · {ball} · {clk} · "
+                f"{fctx.down}&{board_distance} · {ball} · {clk} · "
                 f"{cov_lbl} · {fctx.box_count} box"
                 + (" · BLITZ" if fctx.blitz_likely else "")
             )
@@ -416,8 +436,11 @@ def render_recommendation_panel(
                 "Each button logs **this call** with the shown yards/outcome and advances the chains. "
                 "Use **Advanced** only when you need a non-default target or rare outcome label."
             )
-            gen_distance = int(result["ctx"].distance)
+            gen_distance = recommendation_card_distance(ctx)
             ytg = net_yards_to_endzone(str(fctx.territory), int(fctx.yardline))
+            log_block = log_result_blocked_reason(game.possession)
+            if log_block:
+                st.caption(log_block)
 
             with st.expander("Advanced: outcome dropdown & primary target", expanded=False):
                 st.selectbox("What happened?", LOG_OUTCOME_OPTIONS, index=0, key="main_log_semantic_outcome")
@@ -431,11 +454,15 @@ def render_recommendation_panel(
                 forced_incomplete: bool = False,
                 outcome_ui_override: Optional[str] = None,
             ) -> None:
+                blocked = log_result_blocked_reason(st.session_state.game.possession)
+                if blocked:
+                    st.warning(blocked)
+                    return
                 st.session_state[UNDO_BUNDLE] = {
                     "territory": str(fctx.territory),
                     "yardline": int(fctx.yardline),
                     "down": int(fctx.down),
-                    "distance": int(fctx.distance),
+                    "distance": gen_distance,
                 }
                 if forced_interception:
                     outcome_ui = "Interception"
@@ -461,7 +488,7 @@ def render_recommendation_panel(
                     territory=str(fctx.territory),
                     yardline=int(fctx.yardline),
                     down=int(fctx.down),
-                    distance=int(fctx.distance),
+                    distance=gen_distance,
                     actual=sem,
                 )
                 earned_fd = earned_first_down_for_actual_play(sem, sem.yards_gained, gen_distance) or bool(

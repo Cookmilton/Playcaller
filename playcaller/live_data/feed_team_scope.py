@@ -79,7 +79,13 @@ def current_feed_plays_merge_allowed(
             "use **Both teams** or wait for possession metadata)"
         )
     if sc == PREVIOUS_DRIVES_FILTER_OUR and side != "our":
-        return False, "current-drive merge skipped (feed team scope: **Our team only**; possession is opponent)"
+        return False, (
+            "current-drive merge skipped (feed team scope: **Our team only**; "
+            "current feed drive belongs to opponent)"
+        )
     if sc == PREVIOUS_DRIVES_FILTER_OPPONENT and side != "opp":
-        return False, "current-drive merge skipped (feed team scope: **Opponent only**; possession is our team)"
+        return False, (
+            "current-drive merge skipped (feed team scope: **Opponent only**; "
+            "current feed drive belongs to our team)"
+        )
     return True, ""

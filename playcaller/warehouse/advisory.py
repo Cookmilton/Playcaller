@@ -95,7 +95,8 @@ def build_warehouse_advisory_payload(
     *,
     similar_play_limit: int = 12,
 ) -> dict[str, Any]:
-    possession = str(game.possession) if game is not None else "offense"
+    # ``Game.possession`` is optional; ``str(None)`` would leak "None" into advisory copy.
+    possession = str(getattr(game, "possession", None) or "offense")
     core = play_situation_core_from_context(ctx, possession=possession)
     base: dict[str, Any] = {
         "mode": "advisory",

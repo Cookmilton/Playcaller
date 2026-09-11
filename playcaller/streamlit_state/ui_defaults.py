@@ -17,6 +17,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_TEAM_SCOPE,
     UI_PREVIOUS_DRIVES_FILTER,
 )
+from playcaller.possession import UI_POSSESSION_UNSET
 
 
 def new_game_ui_values() -> dict[str, Any]:
@@ -48,7 +49,7 @@ def new_game_ui_values() -> dict[str, Any]:
         "ui_mismatch": "",
         "ui_auto_generate": False,
         "ui_drive_end_on_new": DRIVE_END_UI_AUTO,
-        "ui_possession_side": "Our team",
+        "ui_possession_side": UI_POSSESSION_UNSET,
         UI_PREVIOUS_DRIVES_FILTER: "our",
         LIVE_FEED_TEAM_SCOPE: "our",
     }

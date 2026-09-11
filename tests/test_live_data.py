@@ -402,6 +402,92 @@ def test_fetch_snapshot_includes_raw_summary(monkeypatch) -> None:
     assert fr.raw_summary == payload
 
 
+def test_feed_play_text_uses_the_real_espn_field() -> None:
+    """``play["text"]`` is a plain string; the old branch read a nonexistent ``description``."""
+    payload = json.loads(
+        (Path(__file__).resolve().parent / "fixtures" / "espn_summary_live_401872657.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    snap = parse_espn_summary(payload, sport="nfl", our_team_id="14")
+    assert snap.new_plays
+    for ev in snap.new_plays:
+        assert ev.summary_text.strip()
+        assert ev.summary_text != "(no ESPN description)"
+    assert "Corum" in snap.new_plays[-1].summary_text
+    assert not any("empty description text" in n for n in snap.debug_notes)
+
+
+def test_empty_description_note_still_fires_for_genuinely_empty_rows() -> None:
+    payload = json.loads(
+        (Path(__file__).resolve().parent / "fixtures" / "espn_summary_live_401872657.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for p in payload["drives"]["current"]["plays"]:
+        p["text"] = ""
+    snap = parse_espn_summary(payload, sport="nfl", our_team_id="14")
+    assert all(ev.summary_text == "(no ESPN description)" for ev in snap.new_plays)
+    assert any("2 play row(s) had empty description text" in n for n in snap.debug_notes)
+
+
+def test_fetch_snapshot_requests_summary_and_scoreboard(monkeypatch) -> None:
+    from playcaller.live_data.espn_football import EspnFootballProvider
+
+    base = Path(__file__).resolve().parent / "fixtures"
+    summary = json.loads((base / "espn_summary_live_401872657.json").read_text(encoding="utf-8"))
+    scoreboard = json.loads(
+        (base / "espn_scoreboard_live_401872657.json").read_text(encoding="utf-8")
+    )
+    urls: list[str] = []
+
+    def fake_fetch(url: str):
+        urls.append(url)
+        return JsonFetchResult(data=scoreboard if "scoreboard" in url else summary)
+
+    monkeypatch.setattr("playcaller.live_data.espn_football.fetch_json", fake_fetch)
+    fr = EspnFootballProvider("nfl").fetch_snapshot("401872657", our_team_id="14")
+    assert fr.ok and fr.snapshot is not None
+    assert any("summary?event=401872657" in u for u in urls)
+    assert any(u.endswith("/scoreboard") for u in urls)
+    assert fr.snapshot.situation_source == "scoreboard"
+    assert fr.snapshot.down == 2 and fr.snapshot.distance == 1
+    # ``raw_summary`` must stay the summary payload for the warehouse ingest hook.
+    assert fr.raw_summary == summary
+
+
+def test_fetch_snapshot_survives_scoreboard_failure(monkeypatch) -> None:
+    from playcaller.live_data.espn_football import EspnFootballProvider
+
+    summary = json.loads(
+        (
+            Path(__file__).resolve().parent / "fixtures" / "espn_summary_live_401872657.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    def fake_fetch(url: str):
+        if "scoreboard" in url:
+            raise RuntimeError("scoreboard 503")
+        return JsonFetchResult(data=summary)
+
+    monkeypatch.setattr("playcaller.live_data.espn_football.fetch_json", fake_fetch)
+    fr = EspnFootballProvider("nfl").fetch_snapshot("401872657", our_team_id="14")
+    assert fr.ok and fr.snapshot is not None
+    assert fr.snapshot.situation_source == "last_play_end"
+    assert any("scoreboard 503" in n for n in fr.snapshot.debug_notes)
+
+
+def test_fetch_snapshot_fails_when_summary_fetch_fails(monkeypatch) -> None:
+    from playcaller.live_data.espn_football import EspnFootballProvider
+
+    def fake_fetch(url: str):
+        raise RuntimeError("summary 500")
+
+    monkeypatch.setattr("playcaller.live_data.espn_football.fetch_json", fake_fetch)
+    fr = EspnFootballProvider("nfl").fetch_snapshot("401872657", our_team_id="14")
+    assert not fr.ok and "summary 500" in (fr.error or "")
+
+
 def test_list_scoreboard_ufl_fetches_ufl_scoreboard(monkeypatch) -> None:
     urls: list[str] = []
 

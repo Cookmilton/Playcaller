@@ -6,8 +6,6 @@ import html
 import json
 import logging
 import os
-from datetime import datetime
-
 import streamlit as st
 
 from football_history_warehouse.ingest.from_json import ingest_espn_summary_after_live_fetch
@@ -88,19 +86,32 @@ from playcaller.streamlit_state.keys import (
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
+    PENDING_SESSION_SETUP_HYDRATE,
     UI_HISTORICAL_NUDGE_ENABLED,
     WAREHOUSE_HISTORICAL_SIGNAL,
 )
 from playcaller.streamlit_state.ui_write_guard import assign_session_state, register_ui_widget_key_bound
-from playcaller.streamlit_state.widget_backend_bridge import request_widget_hydrate_from_backend
+from playcaller.streamlit_state.widget_backend_bridge import (
+    GAME_DISTANCE_MAX,
+    GAME_DISTANCE_MIN,
+    GAME_DOWN_ALLOWED_VALUES,
+    GAME_TIMEOUTS_ALLOWED_VALUES,
+    GAME_YARDLINE_RANGE,
+    request_widget_hydrate_from_backend,
+)
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
+from playcaller.streamlit_state.possession import (
+    POSSESSION_RADIO_OPTIONS,
+    UI_POSSESSION_UNSET,
+    end_drive_blocked_reason,
+    generate_blocked_reason_for_possession,
+    possession_side_radio_label,
+)
 from playcaller.streamlit_state.session import (
     clear_coached_team_espn_session_identity,
     clear_live_feed_session_keys,
-    possession_side_radio_label,
 )
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
-from playcaller.streamlit_state.session_setup import hydrate_session_setup_widgets
 from playcaller.ui.espn_live_flow import (
     EspnLiveSyncReadiness,
     ManualEventLookupPhase,
@@ -126,6 +137,7 @@ from playcaller.ui.product_copy import (
     SIDEBAR_SECTION_REVIEW_EXPORT,
     SIDEBAR_SECTION_REVIEW_EXPORT_EXPANDER,
 )
+from playcaller.ui.local_time import format_synced_hhmm
 from playcaller.ui.sidebar_presets import (
     builtin_opp35_active,
     builtin_own25_active,
@@ -136,6 +148,11 @@ from playcaller.ui.sidebar_presets import (
 from playcaller.ui.warehouse_sidebar import render_sidebar_warehouse_section, render_warehouse_advanced_panel
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_board_manual() -> None:
+    """Widget ``on_change``: operator edited a board field (not a hydrate)."""
+    session_mark_manual(st.session_state)
 
 
 def _bind_ui(k: str) -> None:
@@ -168,6 +185,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
     """Returns ``(sidebar_generate_submitted, export_slot)`` — fill ``export_slot`` after main console."""
     generate = False
     export_slot = None
+    generate_block = generate_blocked_reason_for_possession(game.possession)
     with st.sidebar:
 
         st.markdown(
@@ -258,7 +276,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                                 request_widget_hydrate_from_backend(st.session_state)
                                 st.session_state[PENDING_END_DRIVE_UI] = {
                                     "ui_possession_side": possession_side_radio_label(
-                                        possession=str(g0.possession)
+                                        possession=g0.possession
                                     ),
                                 }
                                 drive_log.reset()
@@ -271,7 +289,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                                 aud = getattr(g0, "recommendation_audit", None) or []
                                 mx = max((int(r.get("drive_epoch", 0)) for r in aud), default=-1)
                                 st.session_state.eval_drive_epoch = mx + 1
-                                hydrate_session_setup_widgets(st.session_state, g0)
+                                st.session_state[PENDING_SESSION_SETUP_HYDRATE] = True
                                 st.toast("Loaded game from JSON.")
                                 st.rerun()
             if new_clicked:
@@ -288,7 +306,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 clear_in_progress_log_state(st.session_state)
                 clear_live_feed_session_keys(st.session_state)
                 clear_coached_team_espn_session_identity(st.session_state)
-                hydrate_session_setup_widgets(st.session_state, st.session_state.game)
+                st.session_state[PENDING_SESSION_SETUP_HYDRATE] = True
                 st.rerun()
 
         st.divider()
@@ -706,8 +724,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             ts = st.session_state.get(LIVE_FEED_LAST_SYNC_EPOCH)
             if ts:
                 origin = str(st.session_state.get(LIVE_FEED_LAST_ORIGIN, "—"))
-                lt = datetime.fromtimestamp(float(ts))
-                line = f"Synced **{lt.strftime('%H:%M')}** · {origin}"
+                line = f"Synced **{format_synced_hhmm(float(ts))}** · {origin}"
                 st.caption(line)
             aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
             if aud:
@@ -850,14 +867,22 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
 
             st.markdown("**Possession**")
             st.caption("Who has the ball for **this** drive (updates when you end a drive or use **New game**).")
-            st.radio(
-                "Offense",
-                ["Our team", "Opponent"],
-                horizontal=True,
-                key="ui_possession_side",
-                label_visibility="collapsed",
+            _poss = st.session_state.get("ui_possession_side") or UI_POSSESSION_UNSET
+            pcols = st.columns(3)
+            _poss_chip_keys = (
+                "sidebar_chip_poss_unset",
+                "sidebar_chip_poss_our",
+                "sidebar_chip_poss_opp",
             )
-            _bind_ui("ui_possession_side")
+            for col, lab, chip_key in zip(pcols, POSSESSION_RADIO_OPTIONS, _poss_chip_keys):
+                with col:
+                    if st.button(
+                        lab,
+                        use_container_width=True,
+                        key=chip_key,
+                        type="primary" if _poss == lab else "secondary",
+                    ):
+                        apply_and_rerun(ui_possession_side=lab)
             sc1, sc2 = st.columns(2)
             with sc1:
                 st.number_input(
@@ -929,12 +954,15 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     )
 
             st.markdown("**Generate play call**")
+            if generate_block:
+                st.caption(generate_block)
             with st.form("generate_form", clear_on_submit=False):
                 generate = st.form_submit_button(
                     "Generate play call",
                     type="primary",
                     use_container_width=True,
                     key="sidebar_form_submit_generate",
+                    disabled=bool(generate_block),
                 )
             can_undo = bool(drive_log.results) and st.session_state.get(UNDO_BUNDLE) is not None
             if st.button(
@@ -954,11 +982,15 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 "**End drive** archives plays to game history, flips possession when appropriate, burns clock, "
                 "then starts a fresh series — same as broadcast “next possession.”"
             )
+            end_block = end_drive_blocked_reason(game.possession)
+            if end_block:
+                st.caption(end_block)
             if st.button(
                 "End drive & next series",
                 type="primary",
                 use_container_width=True,
                 key="sidebar_btn_end_drive_next",
+                disabled=bool(end_block),
             ):
                 archive_current_drive_and_reset_session()
                 st.rerun()
@@ -966,30 +998,70 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
             st.caption("**One-tap end** (overrides the dropdown for that archive only):")
             er1, er2, er3 = st.columns(3)
             with er1:
-                if st.button("End · Auto", use_container_width=True, key="sidebar_quick_end_auto"):
+                if st.button(
+                    "End · Auto",
+                    use_container_width=True,
+                    key="sidebar_quick_end_auto",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_UI_AUTO)
                     st.rerun()
-                if st.button("End · Punt", use_container_width=True, key="sidebar_quick_end_punt"):
+                if st.button(
+                    "End · Punt",
+                    use_container_width=True,
+                    key="sidebar_quick_end_punt",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_PUNT)
                     st.rerun()
-                if st.button("End · TD", use_container_width=True, key="sidebar_quick_end_td"):
+                if st.button(
+                    "End · TD",
+                    use_container_width=True,
+                    key="sidebar_quick_end_td",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TOUCHDOWN)
                     st.rerun()
             with er2:
-                if st.button("End · FG", use_container_width=True, key="sidebar_quick_end_fg"):
+                if st.button(
+                    "End · FG",
+                    use_container_width=True,
+                    key="sidebar_quick_end_fg",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL)
                     st.rerun()
-                if st.button("End · FG miss", use_container_width=True, key="sidebar_quick_end_fg_miss"):
+                if st.button(
+                    "End · FG miss",
+                    use_container_width=True,
+                    key="sidebar_quick_end_fg_miss",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_FIELD_GOAL_MISS)
                     st.rerun()
-                if st.button("End · INT", use_container_width=True, key="sidebar_quick_end_int"):
+                if st.button(
+                    "End · INT",
+                    use_container_width=True,
+                    key="sidebar_quick_end_int",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_INT)
                     st.rerun()
             with er3:
-                if st.button("End · Fum", use_container_width=True, key="sidebar_quick_end_fum"):
+                if st.button(
+                    "End · Fum",
+                    use_container_width=True,
+                    key="sidebar_quick_end_fum",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_FUMBLE)
                     st.rerun()
-                if st.button("End · TOD", use_container_width=True, key="sidebar_quick_end_tod"):
+                if st.button(
+                    "End · TOD",
+                    use_container_width=True,
+                    key="sidebar_quick_end_tod",
+                    disabled=bool(end_block),
+                ):
                     archive_current_drive_and_reset_session(end_kind_override=DRIVE_END_TURNOVER_ON_DOWNS)
                     st.rerun()
 
@@ -1028,11 +1100,19 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 st.markdown("##### Fine tune (sliders)")
                 st.caption("Down, distance, field, defense read, clock — full precision.")
                 c1, c2 = st.columns(2)
-                c1.selectbox("Down", [1, 2, 3, 4], key="ui_down")
-                c2.selectbox(
+                c1.selectbox(
+                    "Down",
+                    list(GAME_DOWN_ALLOWED_VALUES),
+                    key="ui_down",
+                    on_change=_mark_board_manual,
+                )
+                c2.number_input(
                     "Distance",
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20],
+                    min_value=GAME_DISTANCE_MIN,
+                    max_value=GAME_DISTANCE_MAX,
+                    step=1,
                     key="ui_distance",
+                    on_change=_mark_board_manual,
                 )
                 _bind_ui("ui_down")
                 _bind_ui("ui_distance")
@@ -1042,13 +1122,15 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                     horizontal=True,
                     format_func=lambda x: "Our side (own hash → midfield)" if x == "own" else "Their side (toward their goal)",
                     key="ui_territory",
+                    on_change=_mark_board_manual,
                 )
                 st.slider(
                     "Yard line (1 = that side's goal line · 50 = midfield)",
-                    1,
-                    50,
+                    GAME_YARDLINE_RANGE[0],
+                    GAME_YARDLINE_RANGE[1],
                     key="ui_yardline",
                     help="Same as broadcast: **Own 25** = our 25-yard line; **Opp 37** = their 37.",
+                    on_change=_mark_board_manual,
                 )
                 _bind_ui("ui_territory")
                 _bind_ui("ui_yardline")
@@ -1094,8 +1176,8 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 _bind_ui("ui_quarter_clock_mins")
                 _bind_ui("ui_quarter_clock_secs")
                 c5, c6 = st.columns(2)
-                c5.selectbox("Own TOs", [0, 1, 2, 3], key="ui_own_tos")
-                c6.selectbox("Opp TOs", [0, 1, 2, 3], key="ui_opp_tos")
+                c5.selectbox("Own TOs", list(GAME_TIMEOUTS_ALLOWED_VALUES), key="ui_own_tos")
+                c6.selectbox("Opp TOs", list(GAME_TIMEOUTS_ALLOWED_VALUES), key="ui_opp_tos")
                 _bind_ui("ui_own_tos")
                 _bind_ui("ui_opp_tos")
                 st.selectbox(

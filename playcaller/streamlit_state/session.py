@@ -18,6 +18,7 @@ from playcaller.history.repository_settings import (
 )
 from playcaller.state import DriveLogger
 from playcaller.streamlit_state.session_setup import ensure_session_setup_widget_defaults
+from playcaller.possession import possession_side_radio_label
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
@@ -28,6 +29,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_ERROR,
     LIVE_FEED_LAST_ORIGIN,
+    LIVE_FEED_LAST_CURRENT_DRIVE_ID,
     LIVE_FEED_LAST_POSSESSION_TEAM_ID,
     LIVE_FEED_HTTP_INSECURE_WARNING,
     LIVE_FEED_LAST_SYNC_EPOCH,
@@ -48,11 +50,6 @@ from playcaller.streamlit_state.keys import (
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
     UI_PREVIOUS_DRIVES_FILTER,
 )
-
-
-def possession_side_radio_label(*, possession: str) -> str:
-    """Sidebar radio label for who has the ball (``Game.possession`` is ``offense`` | ``defense``)."""
-    return "Our team" if possession == "offense" else "Opponent"
 
 
 def migrate_legacy_situation_widgets(ss: MutableMapping[str, Any]) -> None:
@@ -181,7 +178,7 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
     if "ui_live_home_or_away" not in ss:
         ss["ui_live_home_or_away"] = "away"
     if LIVE_FEED_LAST_ORIGIN not in ss:
-        ss[LIVE_FEED_LAST_ORIGIN] = "manual"
+        ss[LIVE_FEED_LAST_ORIGIN] = None
     if "eval_drive_epoch" not in ss:
         ss["eval_drive_epoch"] = 0
     if UI_PREVIOUS_DRIVES_FILTER not in ss:
@@ -212,6 +209,7 @@ def clear_live_feed_session_keys(ss: MutableMapping[str, Any]) -> None:
     ss.pop(LIVE_FEED_MERGED_ESPN_DRIVE_KEYS, None)
     ss.pop(LIVE_FEED_SEEN_PLAY_IDS, None)
     ss.pop(LIVE_FEED_LAST_POSSESSION_TEAM_ID, None)
+    ss.pop(LIVE_FEED_LAST_CURRENT_DRIVE_ID, None)
     ss.pop(LIVE_FEED_LAST_AUDIT, None)
     ss.pop(LIVE_FEED_LAST_ERROR, None)
     ss.pop(LIVE_FEED_LAST_SYNC_EPOCH, None)
@@ -222,4 +220,4 @@ def clear_live_feed_session_keys(ss: MutableMapping[str, Any]) -> None:
     ss[LIVE_FEED_MANUAL_EVENT_FETCH_ERROR] = None
     ss[LIVE_FEED_MANUAL_EVENT_LAST_ATTEMPT_ID] = ""
     ss[LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR] = ""
-    ss[LIVE_FEED_LAST_ORIGIN] = "manual"
+    ss[LIVE_FEED_LAST_ORIGIN] = None

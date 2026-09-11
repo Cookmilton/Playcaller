@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -11,9 +12,13 @@ from .espn_game_state import (
     resolve_espn_clock_seconds,
     snapshot_state_sanity_flags,
 )
+from .espn_play_text_players import play_text_from_espn_row
+from .espn_situation import resolve_espn_situation, situation_timeouts_for_coached_team
 from .espn_summary_teams import team_labels_from_espn_summary
 from .http_util import fetch_json
 from .types import FeedPlayEvent, FetchResult, NormalizedGameSnapshot
+
+logger = logging.getLogger(__name__)
 
 Sport = Literal["nfl", "college-football", "ufl"]
 
@@ -184,6 +189,15 @@ def _current_feed_drive_play_dicts(payload: Dict[str, Any]) -> Tuple[Dict[str, A
     return tuple(out)
 
 
+def _current_feed_drive_id(payload: Dict[str, Any]) -> Optional[str]:
+    drives = payload.get("drives") or {}
+    current = drives.get("current")
+    if not isinstance(current, dict):
+        return None
+    did = str(current.get("id") or "").strip()
+    return did or None
+
+
 def _current_feed_drive_team_espn_id(payload: Dict[str, Any]) -> Optional[str]:
     drives = payload.get("drives") or {}
     current = drives.get("current")
@@ -196,16 +210,38 @@ def _current_feed_drive_team_espn_id(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _coached_home_away(comp: Dict[str, Any], our_team_id: str) -> str:
+    """``"home"`` / ``"away"`` for the coached team from a competition's competitors."""
+    oid = str(our_team_id or "").strip()
+    if not oid:
+        return ""
+    for co in comp.get("competitors") or []:
+        if not isinstance(co, dict):
+            continue
+        team = co.get("team") if isinstance(co.get("team"), dict) else {}
+        if str(co.get("id") or team.get("id") or "").strip() != oid:
+            continue
+        return str(co.get("homeAway") or "").strip().lower()
+    return ""
+
+
 def parse_espn_summary(
     payload: Dict[str, Any],
     *,
     sport: Sport,
     our_team_id: str,
+    scoreboard_payload: Optional[Dict[str, Any]] = None,
+    scoreboard_error: Optional[str] = None,
 ) -> NormalizedGameSnapshot:
     """
     Map raw ESPN summary JSON into :class:`NormalizedGameSnapshot`.
 
     ``our_team_id`` is the ESPN numeric team id for the offense you coach (maps to ``Game`` "offense").
+
+    The live situation does not exist on the summary endpoint, so pass ``scoreboard_payload``
+    (and ``scoreboard_error`` when that fetch failed) to get down / distance / field position /
+    possession / timeouts. Without it the parser falls back to
+    ``drives.current.plays[-1].end`` — see :mod:`playcaller.live_data.espn_situation`.
     """
     comp = _competition(payload)
     if not comp:
@@ -229,31 +265,29 @@ def parse_espn_summary(
     ):
         notes.append(f"sanity:{flag}")
 
-    situation = comp.get("situation")
-    situation = situation if isinstance(situation, dict) else None
+    situation, situation_notes = resolve_espn_situation(
+        summary_payload=payload,
+        scoreboard_payload=scoreboard_payload,
+        event_id=eid,
+        scoreboard_error=scoreboard_error,
+    )
+    notes.extend(list(situation_notes))
 
-    down = distance = None
+    down = situation.down if situation else None
+    distance = situation.distance if situation else None
+    yards_to_endzone = situation.yards_to_endzone if situation else None
+    possession_team_id = situation.possession_team_id if situation else None
     abs_yards: Optional[int] = None
-    possession_team_id: Optional[str] = None
+    if yards_to_endzone is not None and 1 <= int(yards_to_endzone) <= 99:
+        abs_yards = 100 - int(yards_to_endzone)
 
-    if situation:
-        down = intish(situation.get("down"))
-        distance = intish(situation.get("distance"))
-        yte = intish(situation.get("yardsToEndzone"))
-        if yte is not None:
-            ytc = max(0, min(99, yte))
-            abs_yards = 99 if ytc == 0 else max(1, min(99, 100 - ytc))
-        possession_team_id = situation.get("teamPossessionId") or situation.get("possession")
-        if possession_team_id is not None:
-            possession_team_id = str(possession_team_id)
-    else:
-        notes.append("No in-game situation block (game may be final or between snaps).")
+    oid = str(our_team_id)
+    our_tos, opp_tos = situation_timeouts_for_coached_team(
+        situation, coached_home_away=_coached_home_away(comp, oid)
+    )
 
     our_score = opp_score = None
-    our_tos = opp_tos = None
-    competitors = comp.get("competitors") or []
-    oid = str(our_team_id)
-    for co in competitors:
+    for co in comp.get("competitors") or []:
         if not isinstance(co, dict):
             continue
         tid = str(co.get("id") or "")
@@ -264,13 +298,6 @@ def parse_espn_summary(
             our_score = sc
         else:
             opp_score = sc
-        # ESPN sometimes lists timeouts on competitor during live games
-        to = intish(co.get("timeouts"))
-        if to is not None:
-            if tid == oid:
-                our_tos = to
-            else:
-                opp_tos = to
 
     poss_ours: Optional[bool] = None
     if possession_team_id:
@@ -281,6 +308,7 @@ def parse_espn_summary(
 
     completed_drives = extract_completed_drives_from_espn_payload(payload, event_id=eid)
     current_feed_plays = _current_feed_drive_play_dicts(payload)
+    cur_drive_id = _current_feed_drive_id(payload)
     cur_team_id = _current_feed_drive_team_espn_id(payload)
 
     team_labels = team_labels_from_espn_summary(payload)
@@ -331,7 +359,10 @@ def parse_espn_summary(
         coached_team_id=str(our_team_id),
         completed_feed_drives=completed_drives,
         current_feed_drive_plays=current_feed_plays,
+        current_feed_drive_id=cur_drive_id,
         current_feed_drive_team_espn_id=cur_team_id,
+        situation_source=situation.source if situation else None,
+        yards_to_endzone=yards_to_endzone,
     )
 
 
@@ -359,11 +390,7 @@ def _extract_recent_plays(
         pid = str(p.get("id") or "")
         if not pid:
             continue
-        tx = p.get("text") or p.get("statYardage")
-        if isinstance(tx, dict):
-            text = str(tx.get("text") or "")
-        else:
-            text = str(p.get("description") or "")
+        text = play_text_from_espn_row(p)
         if not text.strip():
             empty_text_rows += 1
             text = "(no ESPN description)"
@@ -403,14 +430,39 @@ class EspnFootballProvider:
 
     def fetch_snapshot(self, event_id: str, *, our_team_id: str) -> FetchResult:
         try:
-            url = summary_url(self.sport, event_id)
-            res = fetch_json(url)
-            snap = parse_espn_summary(res.data, sport=self.sport, our_team_id=str(our_team_id))
+            res = fetch_json(summary_url(self.sport, event_id))
+        except Exception as e:
+            return FetchResult(ok=False, error=str(e))
+
+        # The situation block lives only on the scoreboard. A failure here degrades the
+        # snapshot to the ``last_play_end`` fallback rather than failing the whole sync.
+        scoreboard_payload: Optional[Dict[str, Any]] = None
+        scoreboard_error: Optional[str] = None
+        insecure = res.used_insecure_ssl_fallback
+        try:
+            sb = fetch_json(scoreboard_url(self.sport))
+            scoreboard_payload = sb.data if isinstance(sb.data, dict) else None
+            insecure = insecure or sb.used_insecure_ssl_fallback
+        except Exception as e:
+            scoreboard_error = str(e)
+            logger.warning(
+                "ESPN scoreboard fetch failed (%s); situation falls back to drives.current play end.",
+                e,
+            )
+
+        try:
+            snap = parse_espn_summary(
+                res.data,
+                sport=self.sport,
+                our_team_id=str(our_team_id),
+                scoreboard_payload=scoreboard_payload,
+                scoreboard_error=scoreboard_error,
+            )
         except Exception as e:
             return FetchResult(ok=False, error=str(e))
         return FetchResult(
             ok=True,
             snapshot=snap,
-            used_insecure_ssl_fallback=res.used_insecure_ssl_fallback,
+            used_insecure_ssl_fallback=insecure,
             raw_summary=res.data if isinstance(res.data, dict) else None,
         )

@@ -16,6 +16,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
+    PENDING_SESSION_SETUP_HYDRATE,
     UNDO_BUNDLE,
 )
 
@@ -50,7 +51,7 @@ def apply_pending_end_drive_ui(ss: MutableMapping[str, Any]) -> None:
     if "ui_score_theirs" in pending:
         ss["ui_score_theirs"] = int(pending["ui_score_theirs"])
     if "ui_possession_side" in pending:
-        ss["ui_possession_side"] = str(pending["ui_possession_side"])
+        ss["ui_possession_side"] = pending["ui_possession_side"]
 
 
 def apply_pending_new_game_ui(ss: MutableMapping[str, Any]) -> None:
@@ -62,15 +63,29 @@ def apply_pending_new_game_ui(ss: MutableMapping[str, Any]) -> None:
         ss[str(k)] = v
 
 
+def apply_pending_session_setup_hydrate(ss: MutableMapping[str, Any]) -> None:
+    """Copy ``game.session_metadata`` onto session-setup widgets; run before those widgets."""
+    if not ss.pop(PENDING_SESSION_SETUP_HYDRATE, None):
+        return
+    game = ss.get("game")
+    if game is None:
+        return
+    from playcaller.streamlit_state.session_setup import hydrate_session_setup_widgets
+
+    hydrate_session_setup_widgets(ss, game)
+
+
 def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     """
-    Single entrypoint: quick-log advance → end-drive clock/possession → new-game full reset.
+    Single entrypoint: quick-log advance → end-drive clock/possession → new-game full reset
+    → session-setup hydrate.
 
     Order matters when multiple buffers are present (last writer wins on overlapping keys).
     """
     apply_pending_log_situation(ss)
     apply_pending_end_drive_ui(ss)
     apply_pending_new_game_ui(ss)
+    apply_pending_session_setup_hydrate(ss)
 
 
 def clear_in_progress_log_state(ss: MutableMapping[str, Any]) -> None:

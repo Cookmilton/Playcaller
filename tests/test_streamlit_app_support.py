@@ -15,7 +15,7 @@ from playcaller.streamlit_app_support import (
 def test_new_game_ui_values_is_complete_snapshot():
     d = new_game_ui_values()
     assert d["ui_down"] == 1
-    assert d["ui_possession_side"] == "Our team"
+    assert d["ui_possession_side"] == "Not set"
     assert "ui_quarter_clock_mins" in d and "ui_game_period" in d
     assert "ui_score_ours" in d and "ui_mismatch" in d
 
@@ -45,12 +45,13 @@ def test_apply_order_end_drive_then_new_game_uses_new_game_for_overlap():
     apply_pending_new_game_ui(ss)
     assert ss["ui_quarter_clock_mins"] == 15
     assert ss["ui_quarter_clock_secs"] == 0
-    assert ss["ui_possession_side"] == "Our team"
+    assert ss["ui_possession_side"] == "Not set"
 
 
 def test_possession_side_radio_label():
     assert possession_side_radio_label(possession="offense") == "Our team"
     assert possession_side_radio_label(possession="defense") == "Opponent"
+    assert possession_side_radio_label(possession=None) == "Not set"
 
 
 def test_apply_pending_log_situation_undo_shape():
@@ -86,4 +87,19 @@ def test_apply_all_pending_matches_sequential_apply():
     apply_all_pending(ss)
     assert ss["ui_quarter_clock_mins"] == 15
     assert ss["ui_quarter_clock_secs"] == 0
-    assert ss["ui_possession_side"] == "Our team"
+    assert ss["ui_possession_side"] == "Not set"
+
+
+def test_apply_pending_session_setup_hydrate_clears_team_name():
+    from playcaller.game import Game
+    from playcaller.streamlit_state.keys import PENDING_SESSION_SETUP_HYDRATE, SESSION_SETUP_TEAM_NAME
+    from playcaller.streamlit_state.pending import apply_all_pending
+
+    ss: dict = {
+        "game": Game.new_game(),
+        SESSION_SETUP_TEAM_NAME: "Keepers",
+        PENDING_SESSION_SETUP_HYDRATE: True,
+    }
+    apply_all_pending(ss)
+    assert ss[SESSION_SETUP_TEAM_NAME] == ""
+    assert PENDING_SESSION_SETUP_HYDRATE not in ss

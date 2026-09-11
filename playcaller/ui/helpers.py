@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import time
 
 import streamlit as st
 
@@ -55,7 +54,9 @@ def net_yards_to_endzone(territory: str, yardline: int) -> int:
 
 
 def fmt_local_epoch(ts: float) -> str:
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(ts)))
+    from playcaller.ui.local_time import format_local_epoch_labeled
+
+    return format_local_epoch_labeled(ts)
 
 
 def ordinal_down(n: int) -> str:

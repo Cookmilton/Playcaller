@@ -143,15 +143,20 @@ def maybe_reset_drive_log_after_completed_import(
 def prepare_seen_play_ids_for_feed(
     session: MutableMapping[str, Any],
     *,
-    possession_team_id: str | None,
-    last_possession_team_id: Any,
-    reset_on_possession_change: bool,
+    current_feed_drive_id: str | None,
+    last_feed_drive_id: Any,
+    reset_on_drive_change: bool,
 ) -> Set[str]:
-    """Build the working ``seen`` set; optionally clear on possession change (same as auto-append)."""
+    """Build the working ``seen`` set; optionally clear when ``drives.current.id`` changes.
+
+    Scoreboard ``situation.possession`` can lead ``drives.current`` by one snap. Resetting
+    on board possession would re-merge the still-current drive as duplicates.
+    """
     seen_list = list(session.get(LIVE_FEED_SEEN_PLAY_IDS) or [])
     seen: Set[str] = set(str(x) for x in seen_list)
-    cur_p = possession_team_id
-    if reset_on_possession_change and cur_p and last_possession_team_id and str(cur_p) != str(last_possession_team_id):
+    cur = str(current_feed_drive_id or "").strip()
+    last = str(last_feed_drive_id or "").strip()
+    if reset_on_drive_change and cur and last and cur != last:
         seen.clear()
     return seen
 

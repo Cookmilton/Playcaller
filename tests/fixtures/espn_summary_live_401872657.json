@@ -1,0 +1,701 @@
+{
+  "header": {
+    "id": "401872657",
+    "competitions": [
+      {
+        "id": "401872657",
+        "status": {
+          "displayClock": "6:10",
+          "period": 1,
+          "type": {
+            "id": "2",
+            "name": "STATUS_IN_PROGRESS",
+            "state": "in",
+            "completed": false,
+            "description": "In Progress",
+            "detail": "6:10 - 1st Quarter",
+            "shortDetail": "6:10 - 1st",
+            "statusPrimary": "6:10",
+            "statusSecondary": "1st"
+          }
+        },
+        "competitors": [
+          {
+            "id": "14",
+            "homeAway": "home",
+            "score": "0",
+            "team": {
+              "id": "14",
+              "abbreviation": "LAR",
+              "displayName": "Los Angeles Rams"
+            }
+          },
+          {
+            "id": "25",
+            "homeAway": "away",
+            "score": "3",
+            "team": {
+              "id": "25",
+              "abbreviation": "SF",
+              "displayName": "San Francisco 49ers"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "drives": {
+    "current": {
+      "id": "4018726573",
+      "description": "1 play, 9 yards, 0:05",
+      "team": {
+        "id": "14",
+        "name": "Rams",
+        "abbreviation": "LAR",
+        "displayName": "Los Angeles Rams",
+        "shortDisplayName": "Rams",
+        "logos": [
+          {
+            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
+            "width": 500,
+            "height": 500,
+            "alt": "",
+            "rel": [
+              "full",
+              "default"
+            ],
+            "lastUpdated": "2026-04-24T14:36Z"
+          },
+          {
+            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/lar.png",
+            "width": 500,
+            "height": 500,
+            "alt": "",
+            "rel": [
+              "full",
+              "dark"
+            ],
+            "lastUpdated": "2026-04-24T14:27Z"
+          },
+          {
+            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lar.png",
+            "width": 500,
+            "height": 500,
+            "alt": "",
+            "rel": [
+              "full",
+              "scoreboard"
+            ],
+            "lastUpdated": "2026-04-24T14:36Z"
+          },
+          {
+            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lar.png",
+            "width": 500,
+            "height": 500,
+            "alt": "",
+            "rel": [
+              "full",
+              "scoreboard",
+              "dark"
+            ],
+            "lastUpdated": "2026-04-24T14:27Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/grayscale.png",
+            "width": 500,
+            "height": 500,
+            "alt": "",
+            "rel": [
+              "full",
+              "grayscale"
+            ],
+            "lastUpdated": "2026-03-31T12:52Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_white_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_on_white_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_black_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_on_black_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_primary_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_on_primary_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_secondary_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_on_secondary_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_black.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_black"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_white.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "primary_logo_white"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_white_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_on_white_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_black_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_on_black_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_primary_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_on_primary_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_secondary_color.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_on_secondary_color"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_black.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_black"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          },
+          {
+            "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_white.png",
+            "width": 4096,
+            "height": 4096,
+            "alt": "",
+            "rel": [
+              "full",
+              "secondary_logo_white"
+            ],
+            "lastUpdated": "2026-07-22T20:30Z"
+          }
+        ]
+      },
+      "start": {
+        "period": {
+          "type": "quarter",
+          "number": 1
+        },
+        "clock": {
+          "displayValue": "6:15"
+        },
+        "yardLine": 25,
+        "text": "LAR 25"
+      },
+      "plays": [
+        {
+          "id": "401872657543",
+          "sequenceNumber": "54300",
+          "text": "E.Pineiro kicks 65 yards from SF 35 to LA 0. X.Smith to LA 25 for 25 yards (A.Davis).",
+          "statYardage": 25,
+          "type": {
+            "id": "53",
+            "text": "Kickoff",
+            "abbreviation": "K"
+          },
+          "period": {
+            "number": 1
+          },
+          "clock": {
+            "displayValue": "6:15"
+          },
+          "homeScore": 0,
+          "awayScore": 3,
+          "start": {
+            "down": 0,
+            "distance": 0,
+            "yardLine": 65,
+            "yardsToEndzone": 65,
+            "team": {
+              "id": "25"
+            }
+          },
+          "end": {
+            "down": 1,
+            "distance": 10,
+            "yardLine": 25,
+            "yardsToEndzone": 75,
+            "downDistanceText": "1st & 10 at LAR 25",
+            "shortDownDistanceText": "1st & 10",
+            "possessionText": "LAR 25",
+            "team": {
+              "id": "14"
+            }
+          }
+        },
+        {
+          "id": "401872657573",
+          "sequenceNumber": "57300",
+          "text": " B.Corum up the middle to LA 34 for 9 yards (M.Sigle).",
+          "statYardage": 9,
+          "type": {
+            "id": "5",
+            "text": "Rush",
+            "abbreviation": "RUSH"
+          },
+          "period": {
+            "number": 1
+          },
+          "clock": {
+            "displayValue": "6:10"
+          },
+          "homeScore": 0,
+          "awayScore": 3,
+          "start": {
+            "down": 1,
+            "distance": 10,
+            "yardLine": 25,
+            "yardsToEndzone": 75,
+            "downDistanceText": "1st & 10 at LAR 25",
+            "shortDownDistanceText": "1st & 10",
+            "possessionText": "LAR 25",
+            "team": {
+              "id": "14"
+            }
+          },
+          "end": {
+            "down": 2,
+            "distance": 1,
+            "yardLine": 34,
+            "yardsToEndzone": 66,
+            "downDistanceText": "2nd & 1 at LAR 34",
+            "shortDownDistanceText": "2nd & 1",
+            "possessionText": "LAR 34",
+            "team": {
+              "id": "14"
+            }
+          },
+          "participants": [
+            {
+              "type": "rusher",
+              "athlete": {
+                "displayName": "Blake Corum",
+                "jersey": "24",
+                "position": {
+                  "name": "Running Back",
+                  "displayName": "Running Back",
+                  "abbreviation": "RB"
+                }
+              }
+            },
+            {
+              "type": "tackler",
+              "athlete": {
+                "displayName": "Marques Sigle",
+                "jersey": "36",
+                "position": {
+                  "name": "Safety",
+                  "displayName": "Safety",
+                  "abbreviation": "S"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "previous": [
+      {
+        "id": "4018726571",
+        "team": {
+          "id": "14",
+          "name": "Rams",
+          "abbreviation": "LAR",
+          "displayName": "Los Angeles Rams",
+          "shortDisplayName": "Rams",
+          "logos": [
+            {
+              "href": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
+              "width": 500,
+              "height": 500,
+              "alt": "",
+              "rel": [
+                "full",
+                "default"
+              ],
+              "lastUpdated": "2026-04-24T14:36Z"
+            },
+            {
+              "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/lar.png",
+              "width": 500,
+              "height": 500,
+              "alt": "",
+              "rel": [
+                "full",
+                "dark"
+              ],
+              "lastUpdated": "2026-04-24T14:27Z"
+            },
+            {
+              "href": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lar.png",
+              "width": 500,
+              "height": 500,
+              "alt": "",
+              "rel": [
+                "full",
+                "scoreboard"
+              ],
+              "lastUpdated": "2026-04-24T14:36Z"
+            },
+            {
+              "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lar.png",
+              "width": 500,
+              "height": 500,
+              "alt": "",
+              "rel": [
+                "full",
+                "scoreboard",
+                "dark"
+              ],
+              "lastUpdated": "2026-04-24T14:27Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/grayscale.png",
+              "width": 500,
+              "height": 500,
+              "alt": "",
+              "rel": [
+                "full",
+                "grayscale"
+              ],
+              "lastUpdated": "2026-03-31T12:52Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_white_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_on_white_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_black_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_on_black_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_primary_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_on_primary_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_on_secondary_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_on_secondary_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_black.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_black"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/primary_logo_white.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "primary_logo_white"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_white_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_on_white_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_black_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_on_black_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_primary_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_on_primary_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_on_secondary_color.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_on_secondary_color"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_black.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_black"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            },
+            {
+              "href": "https://a.espncdn.com/guid/2e1473b2-e269-fd7a-1137-c1edacb85986/logos/secondary_logo_white.png",
+              "width": 4096,
+              "height": 4096,
+              "alt": "",
+              "rel": [
+                "full",
+                "secondary_logo_white"
+              ],
+              "lastUpdated": "2026-07-22T20:30Z"
+            }
+          ]
+        },
+        "plays": [
+          {
+            "id": "40187265740",
+            "sequenceNumber": "4000",
+            "text": "E.Pineiro kicks 65 yards from SF 35 to LA 0. J.Whittington to LA 17 for 17 yards (M.Mustapha).",
+            "statYardage": 17,
+            "type": {
+              "id": "53",
+              "text": "Kickoff",
+              "abbreviation": "K"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "displayValue": "15:00"
+            },
+            "homeScore": 0,
+            "awayScore": 0,
+            "start": {
+              "down": 0,
+              "distance": 0,
+              "yardLine": 65,
+              "yardsToEndzone": 65,
+              "team": {
+                "id": "25"
+              }
+            },
+            "end": {
+              "down": 1,
+              "distance": 10,
+              "yardLine": 17,
+              "yardsToEndzone": 83,
+              "downDistanceText": "1st & 10 at LAR 17",
+              "shortDownDistanceText": "1st & 10",
+              "possessionText": "LAR 17",
+              "team": {
+                "id": "14"
+              }
+            }
+          },
+          {
+            "id": "40187265763",
+            "sequenceNumber": "6300",
+            "text": "(Shotgun) M.Stafford pass incomplete short left to P.Nacua (F.Warner) [N.Bosa].",
+            "statYardage": 0,
+            "type": {
+              "id": "3",
+              "text": "Pass Incompletion"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "displayValue": "14:54"
+            },
+            "homeScore": 0,
+            "awayScore": 0,
+            "start": {
+              "down": 1,
+              "distance": 10,
+              "yardLine": 17,
+              "yardsToEndzone": 83,
+              "downDistanceText": "1st & 10 at LAR 17",
+              "shortDownDistanceText": "1st & 10",
+              "possessionText": "LAR 17",
+              "team": {
+                "id": "14"
+              }
+            },
+            "end": {
+              "down": 2,
+              "distance": 10,
+              "yardLine": 17,
+              "yardsToEndzone": 83,
+              "downDistanceText": "2nd & 10 at LAR 17",
+              "shortDownDistanceText": "2nd & 10",
+              "possessionText": "LAR 17",
+              "team": {
+                "id": "14"
+              }
+            }
+          },
+          {
+            "id": "40187265786",
+            "sequenceNumber": "8600",
+            "text": " (Shotgun) K.Williams left guard to LA 22 for 5 yards (F.Warner).",
+            "statYardage": 5,
+            "type": {
+              "id": "5",
+              "text": "Rush",
+              "abbreviation": "RUSH"
+            },
+            "period": {
+              "number": 1
+            },
+            "clock": {
+              "displayValue": "14:50"
+            },
+            "homeScore": 0,
+            "awayScore": 0,
+            "start": {
+              "down": 2,
+              "distance": 10,
+              "yardLine": 17,
+              "yardsToEndzone": 83,
+              "downDistanceText": "2nd & 10 at LAR 17",
+              "shortDownDistanceText": "2nd & 10",
+              "possessionText": "LAR 17",
+              "team": {
+                "id": "14"
+              }
+            },
+            "end": {
+              "down": 3,
+              "distance": 5,
+              "yardLine": 22,
+              "yardsToEndzone": 78,
+              "downDistanceText": "3rd & 5 at LAR 22",
+              "shortDownDistanceText": "3rd & 5",
+              "possessionText": "LAR 22",
+              "team": {
+                "id": "14"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

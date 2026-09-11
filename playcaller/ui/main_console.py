@@ -7,11 +7,7 @@ import html
 import streamlit as st
 
 from playcaller import FootballPlayPredictor, Game, GameContext, DriveLogger, format_actual_play_result_description
-from playcaller.game_situation_input import (
-    format_ball_spot,
-    format_clock_left_in_quarter,
-    format_live_situation_summary,
-)
+from playcaller.game_situation_input import format_clock_left_in_quarter
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
 from playcaller.services.game_controller import run_generate_if_requested, undo_last_logged_play
 from playcaller.session_game_metadata import (
@@ -33,6 +29,14 @@ from playcaller.ui.helpers import (
 )
 from playcaller.ui.product_copy import EXPANDER_SESSION_RECORD, HEADLINE_LIVE_CONSOLE, HEADLINE_MAIN
 from playcaller.ui.recommendations import render_recommendation_panel
+from playcaller.ui.situation_honesty import (
+    down_distance_html,
+    honest_field_html,
+    honest_summary_line,
+    honesty_from_session,
+    source_chip_html,
+    timeouts_html,
+)
 from playcaller.ui_components import FAM_COLOR, drive_chart, drive_momentum_chart, run_pass_donut
 
 MODE_BANNERS = {
@@ -92,15 +96,22 @@ def render_main_content(
     period_ui = int(st.session_state.get("ui_game_period", quarter))
     ours = int(game.offense_points)
     theirs = int(game.defense_points)
-    sit_line = format_live_situation_summary(
-        period=period_ui,
-        seconds_in_quarter=seconds_remaining,
-        our_score=ours,
-        their_score=theirs,
-        territory=territory,
-        yardline=yardline,
+    honesty = honesty_from_session(
+        st.session_state,
+        possession=game.possession,
         down=down,
         distance=distance,
+        territory=territory,
+        yardline=yardline,
+        own_timeouts=own_timeouts,
+        opp_timeouts=opp_timeouts,
+    )
+    clock_phrase = format_clock_left_in_quarter(period=period_ui, seconds_in_quarter=seconds_remaining)
+    sit_line = honest_summary_line(
+        clock_phrase=clock_phrase,
+        our_score=ours,
+        their_score=theirs,
+        honesty=honesty,
     )
     st.markdown(
         f'<p style="font-size:1.05rem;font-weight:600;color:#e2e8f0;margin:0 0 0.75rem 0">{html.escape(sit_line)}</p>',
@@ -116,7 +127,10 @@ def render_main_content(
             use_container_width=True,
             help="Same as the sidebar — use whichever is closer on broadcast.",
             key="main_console_generate",
+            disabled=bool(honesty.generate_blocked_reason),
         )
+        if honesty.generate_blocked_reason:
+            st.caption(honesty.generate_blocked_reason)
     with op2:
         can_undo = bool(drive_log.results) and st.session_state.get(UNDO_BUNDLE) is not None
         undo_clicked = st.button(
@@ -160,30 +174,33 @@ def render_main_content(
     sc_lbl = f"{game.offense_points}–{game.defense_points}"
     margin = int(game.offense_points) - int(game.defense_points)
     margin_lbl = f"+{margin}" if margin > 0 else str(margin)
-    pos_lbl = "Our ball" if game.possession == "offense" else "Opponent ball"
-    terr_short = "Opp." if territory == "opponents" else "Own"
-    ytg_hud = net_yards_to_endzone(territory, yardline)
+    ytg_html = (
+        honest_field_html(honesty.field_position)
+        if not honesty.field_position.synced
+        else f"{net_yards_to_endzone(territory, yardline)} yds"
+    )
     def_lbl = def_personnel.replace("_", " ").title() if def_personnel != "unknown" else "Def ?"
     cov_hud = coverage_shell.replace("_", " ").upper() if coverage_shell != "unknown" else "Cov ?"
     saf_hud = safeties.replace("_", " ").title() if safeties != "unknown" else "S ?"
     blitz_chip = " · BLITZ" if blitz_likely else ""
     def_strip = html.escape(f"{def_lbl} · {box_count} box · {cov_hud} · {saf_hud}{blitz_chip}", quote=True)
-    ball_spot = format_ball_spot(territory=territory, yardline=yardline)
-    clock_phrase = format_clock_left_in_quarter(period=period_ui, seconds_in_quarter=seconds_remaining)
     st.markdown(
         f'<div style="background:linear-gradient(180deg,#0c1222 0%,#0f172a 100%);border:1px solid #334155;'
         f'border-radius:10px;padding:14px 18px;margin-bottom:6px">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
         f'<div style="font-size:1.5rem;font-weight:800;color:#f8fafc;letter-spacing:-0.02em">'
-        f'{down}&{distance} <span style="color:#64748b;font-weight:500">·</span> {html.escape(ball_spot)}</div>'
+        f'{down_distance_html(honesty)} <span style="color:#64748b;font-weight:500">·</span> '
+        f'{honest_field_html(honesty.field_position)}</div>'
+        f'{source_chip_html(honesty.source_chip)}</div>'
         f'<div style="margin-top:6px;font-size:0.92rem;color:#cbd5e1">'
-        f'<strong style="color:#94a3b8">To goal</strong> {ytg_hud} yds'
+        f'<strong style="color:#94a3b8">To goal</strong> {ytg_html}'
         f' &nbsp;·&nbsp; <strong style="color:#94a3b8">Defense</strong> {def_strip}</div>'
         f'<div style="margin-top:8px;font-size:0.95rem;color:#94a3b8;line-height:1.5">'
         f'<strong style="color:#e2e8f0">Score</strong> {sc_lbl} '
         f'<span style="color:#475569">(margin {margin_lbl})</span>'
         f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">Clock</strong> {html.escape(clock_phrase)}'
-        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">{html.escape(pos_lbl)}</strong>'
-        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">TOs</strong> {own_timeouts}–{opp_timeouts}'
+        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">{honest_field_html(honesty.possession)}</strong>'
+        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">TOs</strong> {timeouts_html(honesty)}'
         f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">This drive</strong> {len(drive_log.results)} play(s)'
         f'</div>'
         f'<div style="margin-top:6px;font-size:0.78rem;color:#64748b">Scoreboard session '
@@ -196,6 +213,8 @@ def render_main_content(
         + "</div></div>",
         unsafe_allow_html=True,
     )
+    for cap in honesty.reason_captions():
+        st.caption(cap)
     if st.session_state.get("last_play_summary"):
         st.markdown(
             '<p style="font-size:0.88rem;color:#94a3b8;margin:0.35rem 0 0 0;line-height:1.35">'

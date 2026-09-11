@@ -1,0 +1,94 @@
+{
+  "events": [
+    {
+      "id": "401999999",
+      "date": "2026-09-11T00:15Z",
+      "competitions": [
+        {
+          "id": "401999999",
+          "situation": {
+            "down": 3,
+            "distance": 8,
+            "possession": "1",
+            "possessionText": "AAA 12"
+          },
+          "competitors": [
+            {
+              "id": "1",
+              "homeAway": "home",
+              "team": {
+                "id": "1",
+                "abbreviation": "AAA"
+              }
+            },
+            {
+              "id": "2",
+              "homeAway": "away",
+              "team": {
+                "id": "2",
+                "abbreviation": "BBB"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401872657",
+      "date": "2026-09-11T00:35Z",
+      "competitions": [
+        {
+          "id": "401872657",
+          "status": {
+            "clock": 370.0,
+            "displayClock": "6:10",
+            "period": 1,
+            "type": {
+              "id": "2",
+              "name": "STATUS_IN_PROGRESS",
+              "state": "in",
+              "completed": false,
+              "description": "In Progress",
+              "detail": "6:10 - 1st Quarter",
+              "shortDetail": "6:10 - 1st"
+            }
+          },
+          "situation": {
+            "down": 2,
+            "distance": 1,
+            "yardLine": 34,
+            "downDistanceText": "2nd & 1 at LAR 34",
+            "shortDownDistanceText": "2nd & 1",
+            "possessionText": "LAR 34",
+            "isRedZone": false,
+            "homeTimeouts": 3,
+            "awayTimeouts": 3,
+            "possession": "14"
+          },
+          "competitors": [
+            {
+              "id": "14",
+              "homeAway": "home",
+              "score": "0",
+              "team": {
+                "id": "14",
+                "abbreviation": "LAR",
+                "displayName": "Los Angeles Rams"
+              }
+            },
+            {
+              "id": "25",
+              "homeAway": "away",
+              "score": "3",
+              "team": {
+                "id": "25",
+                "abbreviation": "SF",
+                "displayName": "San Francisco 49ers"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

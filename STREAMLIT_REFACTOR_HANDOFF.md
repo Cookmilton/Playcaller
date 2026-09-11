@@ -17,19 +17,35 @@ The package already exposes drive logging via `playcaller/state.py` (`DriveLogge
 
 `new_game_ui_values` lives in **`playcaller/streamlit_state/ui_defaults.py`** so `live_data` → `sync` → `widget_backend_bridge` does not import `session` mid–`live_data` init. `widget_backend_bridge` must not pull session during that bootstrap path.
 
+## ESPN live situation (do not regress)
+
+Canonical write-up: **`docs/espn_live_situation.md`**.
+
+Live situation lives on **scoreboard** `events[].competitions[0].situation`, not summary `header`. Sync fetches both; fallback is `drives.current.plays[-1].end`. Unapplied fields use structured `skipped: {field, reason}`. Do not reintroduce summary-header `situation` in fixtures.
+
+Seen-play-id reset keys on **`drives.current.id`**, never on scoreboard possession — the scoreboard flips possession about one snap early, and resetting on it re-merges the still-current drive as duplicates.
+
+Mirrored widget domains are declared once in `streamlit_state/widget_backend_bridge.py` and imported by `ui/sidebar.py`. Streamlit 1.56 silently resets out-of-domain hydrated values, so feed writers must skip, never clamp. `ui_distance` is a 1–99 `number_input`; the predictor still clamps distance to 1–25 for ranking.
+
+Possession rules live in **`playcaller/possession.py`** (leaf, imports nothing from `playcaller`), so `game.py` imports `flipped_possession` at module level. `streamlit_state/possession.py` re-exports them. **Generate**, **Log result**, and **End drive** are all blocked while possession is unset, each at one choke point.
+
+Possession control: three chips (**Not set** | **Our team** | **Opponent**) via `apply_and_rerun`, not `st.radio` / `st.selectbox`. Streamlit 1.56 reports those widgets' defaults when another chip is clicked; only keys `apply_and_rerun` writes survive. `Game.possession` stays `None` while the chip shows **Not set**.
+
 ## Files created
 
 | Path | Role |
 |------|------|
 | `playcaller/streamlit_state/keys.py` | Canonical `session_state` key strings (pending, undo, live feed). |
-| `playcaller/streamlit_state/pending.py` | `apply_pending_*`, **`apply_all_pending`**, `clear_in_progress_log_state`. |
+| `playcaller/streamlit_state/pending.py` | `apply_pending_*`, **`apply_all_pending`** (includes `PENDING_SESSION_SETUP_HYDRATE` so **New game** / **Load JSON** do not write session-setup widgets after they instantiate), `clear_in_progress_log_state`. |
 | `playcaller/streamlit_state/ui_defaults.py` | `new_game_ui_values` and related neutral UI presets (avoids `live_data` import cycles). |
 | `playcaller/streamlit_state/session.py` | `ensure_play_caller_session_defaults`, `possession_side_radio_label`, `clear_live_feed_session_keys` (delegates new-game presets to `ui_defaults` where appropriate). |
 | `playcaller/services/game_controller.py` | End drive, new-game presets, undo, wind sync, chip reruns, **`run_generate_if_requested`**. |
 | `playcaller/ui/helpers.py` | Log labels, HUD math/copy, drive list expanders, `post_log_summary_and_toast`. |
-| `playcaller/ui/sidebar.py` | Full sidebar (presets, fine tune, drive/session, ESPN NFL/college/**UFL**, generate form). |
+| `playcaller/ui/sidebar.py` | Full sidebar (presets, fine tune, drive/session, ESPN NFL/college/**UFL**, generate form). Imports widget-domain constants; Distance is a 1–99 `number_input`. |
 | `playcaller/ui/main_console.py` | Main header, live console, generate/undo, HUD, eval expander, drive lists, recommendation dispatch, drive charts. |
 | `playcaller/ui/recommendations.py` | Two-column recommendation + quick log UI. |
+| `playcaller/ui/situation_honesty.py` | HUD “not synced” / source chip / Generate-disabled reasons. All honesty logic lives here, not in render code. |
+| `playcaller/ui/local_time.py` | Local-time formatting (`Synced HH:MM TZ`); `helpers.fmt_local_epoch` delegates here. |
 | `playcaller/ui/__init__.py` | Re-exports `render_sidebar`, `render_main_content`. |
 
 ## Files changed (high level)
@@ -51,6 +67,11 @@ The package already exposes drive logging via `playcaller/state.py` (`DriveLogge
 | Session defaults / new-game snapshot | `streamlit_state/session.py` |
 | Mutating actions & generate | `services/game_controller.py` |
 | Sidebar layout & ESPN sync | `ui/sidebar.py` |
+| Widget domain constants (down/distance/timeouts/yardline) | `streamlit_state/widget_backend_bridge.py` |
+| Live situation parse (scoreboard → last-play-end) | `live_data/espn_situation.py` |
+| Seen-play-id reset (`drives.current.id`) | `live_data/espn_current_drive_merge.py` |
+| HUD / Generate honesty | `ui/situation_honesty.py` |
+| Local-time formatting | `ui/local_time.py` |
 | Main shell & charts | `ui/main_console.py` |
 | Play card & quick log | `ui/recommendations.py` |
 | Shared formatting / drive lists | `ui/helpers.py` |
@@ -64,6 +85,9 @@ The package already exposes drive logging via `playcaller/state.py` (`DriveLogge
 - **Review UX:** optional handling when `void_undone` rows clutter the timeline; document feed-only sessions (no model rows) in Review Session copy.
 - **History pipeline:** extend the same `snap_review_log` / `recommendation_audit` wording to any remaining operator-facing ingest or loader copy.
 - **Feed semantics:** align sidebar/ingest documentation for `only_append_when_our_possession` vs current-drive merge and team scope (`LIVE_FEED_TEAM_SCOPE`).
+- **Predictor vs board:** `heuristic_predictor` still clamps distance to 1–25; a honest board distance above 25 ranks as 25.
+- **`SyncOptions.reset_seen_play_ids_on_possession_change`:** public field name is historical; consider a rename once call sites can move together.
+- **`Drive.possessing_team`:** still normalizes `None` → `"offense"` in `_norm_possessing_team` while `Game.possession` is optional. It is now unreachable from the UI (End drive is blocked while possession is unset) and logs a warning when it fires, so this is a cleanup, not a correctness gap. Making it optional touches the reconciler, drive display, audit report, and export schema — do it as its own phase.
 
 ## Validation
 

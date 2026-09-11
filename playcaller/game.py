@@ -7,11 +7,15 @@ Aggregates ``ActualPlayResult`` rows without changing the logging / advancement 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import asdict, dataclass, field, fields, replace
 from typing import Any, Dict, List, Literal, Optional
 
 from .domain import ActualPlayResult
+from .possession import flipped_possession
+
+logger = logging.getLogger(__name__)
 
 # Drive ended how (stable keys for analytics / UI)
 DRIVE_END_TOUCHDOWN = "touchdown"
@@ -176,7 +180,8 @@ class Game:
     drives: List[Drive] = field(default_factory=list)
     offense_points: int = 0
     defense_points: int = 0
-    possession: str = "offense"
+    # ``offense`` | ``defense`` | ``None`` (fresh / new-game board has no side yet).
+    possession: Optional[str] = None
     quarter: int = 1
     clock_seconds_remaining: Optional[int] = None
     # Snap-level review timeline (model-at-Generate + optional ``linked_actual``); JSON ``snap_review_log`` alias.
@@ -322,9 +327,24 @@ def classify_drive_end(
     return DriveResult(kind=DRIVE_END_PUNT, headline="Punt", detail_line=detail)
 
 
-def _norm_possessing_team(raw: str) -> str:
+def _norm_possessing_team(raw: Optional[str]) -> str:
+    """
+    Coerce a drive's side to ``offense`` | ``defense``.
+
+    ``Drive.possessing_team`` is not optional while ``Game.possession`` is, so an unset board
+    still lands on ``offense`` here. Every UI path into this fallback is gated
+    (:func:`playcaller.possession.end_drive_blocked_reason`), so a warning means either a
+    non-UI caller or a regression in that gate.
+    """
     t = (raw or "").strip().lower()
-    return t if t in ("offense", "defense") else "offense"
+    if t in ("offense", "defense"):
+        return t
+    logger.warning(
+        "playcaller: Drive.possessing_team coerced %r -> 'offense'; "
+        "End drive should be blocked while Game.possession is unset.",
+        raw,
+    )
+    return "offense"
 
 
 def complete_drive_from_plays(
@@ -334,7 +354,7 @@ def complete_drive_from_plays(
     last_snap_turnover_on_downs: bool = False,
     seconds_per_play: int = 38,
     end_kind_override: Optional[str] = None,
-    possessing_team: str = "offense",
+    possessing_team: Optional[str] = "offense",
     feed_team_espn_id: str = "",
     feed_team_abbr: str = "",
     feed_team_display_name: str = "",
@@ -365,12 +385,12 @@ def clock_seconds_after_drive_elapsed(current_clock_seconds: int, drive: Drive) 
 
 
 def flip_possession_after_drive(game: Game, drive: Drive) -> None:
-    """Flip ``game.possession`` after a drive that changes who has the ball."""
+    """Flip ``game.possession`` after a drive that changes who has the ball (unknown stays unknown)."""
     if drive.result is None or drive.result.kind == DRIVE_END_UNKNOWN:
         return
     if drive.result.kind not in DRIVE_END_CHANGE_OF_POSSESSION_KINDS:
         return
-    game.possession = "defense" if game.possession == "offense" else "offense"
+    game.possession = flipped_possession(game.possession)
 
 
 def _actual_play_from_dict(d: Dict[str, Any]) -> ActualPlayResult:
@@ -462,6 +482,18 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
     return payload
 
 
+def _possession_from_export(data: Dict[str, Any]) -> Optional[str]:
+    """Legacy saves omit the key (treat as offense). Explicit null is unset."""
+    # Key absent = pre-``Optional[possession]`` file whose app default was always offense;
+    # explicit ``null`` = a board the operator (or a fresh game) left unset.
+    if "possession" not in data:
+        return "offense"
+    raw = data.get("possession")
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw)
+
+
 def game_from_dict(data: Dict[str, Any]) -> Game:
     """Restore a ``Game`` from ``game_to_dict`` output."""
     from playcaller.review.snap_review import snap_review_rows_from_export
@@ -476,7 +508,7 @@ def game_from_dict(data: Dict[str, Any]) -> Game:
         drives=drives,
         offense_points=int(data.get("offense_points", 0)),
         defense_points=int(data.get("defense_points", 0)),
-        possession=str(data.get("possession", "offense")),
+        possession=_possession_from_export(data),
         quarter=int(data.get("quarter", 1)),
         clock_seconds_remaining=data.get("clock_seconds_remaining"),
         recommendation_audit=audit,
