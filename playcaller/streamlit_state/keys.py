@@ -36,6 +36,9 @@ PENDING_SESSION_SETUP_HYDRATE = "pending_session_setup_hydrate"
 PENDING_SESSION_GAME_DATE = "pending_session_game_date"
 # When True, pending ESPN date overwrites an ESPN-hydrated widget (not an operator date).
 PENDING_SESSION_GAME_DATE_REPLACE = "pending_session_game_date_replace"
+# Fill ``session_setup_team_name`` from ESPN when empty (operator name wins).
+PENDING_SESSION_TEAM_NAME = "pending_session_team_name"
+PENDING_SESSION_TEAM_NAME_REPLACE = "pending_session_team_name_replace"
 # Patch ``live_feed_scoreboard_rows[].detail`` from snapshot status before the Game selectbox.
 PENDING_SCOREBOARD_STATUS = "pending_scoreboard_status"
 # Load-JSON payload applied before widgets (see ``streamlit_state.load_game``).

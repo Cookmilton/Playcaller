@@ -16,7 +16,7 @@ from .espn_drive_plays import feed_drive_plays
 from .espn_game_date import resolve_espn_game_date
 from .espn_play_text_players import play_text_from_espn_row
 from .espn_situation import resolve_espn_situation, situation_timeouts_for_coached_team
-from .espn_summary_teams import team_labels_from_espn_summary
+from .espn_summary_teams import team_label_pair, team_labels_from_espn_summary
 from .http_util import fetch_json
 from .types import FeedPlayEvent, FetchResult, NormalizedGameSnapshot
 
@@ -215,6 +215,18 @@ def _current_feed_drive_team_espn_id(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _coached_team_session_name(labels: dict, our_team_id: str) -> str:
+    """Display name (else abbreviation) for the coached ESPN team id; empty when unknown."""
+    tid = str(our_team_id or "").strip()
+    if not tid or tid not in labels:
+        return ""
+    abbr, disp = team_label_pair(labels, tid)
+    name = str(disp or abbr or "").strip()
+    if not name or name.startswith("Team ") or name == "?":
+        return ""
+    return name
+
+
 def _coached_home_away(comp: Dict[str, Any], our_team_id: str) -> str:
     """``"home"`` / ``"away"`` for the coached team from a competition's competitors."""
     oid = str(our_team_id or "").strip()
@@ -371,6 +383,7 @@ def parse_espn_summary(
         situation_source=situation.source if situation else None,
         yards_to_endzone=yards_to_endzone,
         game_date=resolve_espn_game_date(payload, scoreboard_payload, event_id=eid),
+        coached_team_name=_coached_team_session_name(team_labels, oid),
     )
 
 
