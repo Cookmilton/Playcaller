@@ -36,6 +36,7 @@ from playcaller.live_data.drive_display import (
 )
 from playcaller.live_data.espn_football import fetch_event_teams
 from playcaller.live_data.espn_game_date import game_date_mismatch_warning
+from playcaller.live_data.espn_session_team import team_name_mismatch_warning
 from playcaller.game_situation_input import period_display_label
 from playcaller.services.game_controller import (
     apply_and_rerun,
@@ -191,6 +192,9 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
         with st.expander(SIDEBAR_SECTION_GAME_SETUP, expanded=True):
             st.caption("Session identity — stored on exported JSON.")
             st.text_input("Our team name", key=SESSION_SETUP_TEAM_NAME, placeholder="e.g. East High")
+            name_mismatch = team_name_mismatch_warning(st.session_state)
+            if name_mismatch:
+                st.warning(name_mismatch)
             st.text_input("Opponent", key=SESSION_SETUP_OPPONENT, placeholder="Optional")
             st.text_input("Game date", key=SESSION_SETUP_GAME_DATE, placeholder="YYYY-MM-DD")
             date_mismatch = game_date_mismatch_warning(st.session_state)

@@ -75,6 +75,8 @@ class NormalizedGameSnapshot:
     yards_to_endzone: Optional[int] = None
     # UTC calendar date from ESPN event/competition timestamp; None when the payload has none.
     game_date: Optional[str] = None
+    # Coached-team display name for session identity; empty when unknown.
+    coached_team_name: str = ""
 
 
 @dataclass

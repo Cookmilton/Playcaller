@@ -82,6 +82,7 @@ from .espn_current_drive_merge import (
     top_up_open_drive_log_from_completed_drives,
 )
 from .espn_game_date import apply_espn_game_date_to_session
+from .espn_session_team import apply_espn_team_name_to_session
 from .espn_import_merge import merge_completed_espn_drives_into_game
 from .feed_team_scope import current_feed_plays_merge_allowed, normalize_feed_team_scope
 from .types import FeedCompletedDrive, FeedPlayEvent, NormalizedGameSnapshot, SyncResult
@@ -427,6 +428,7 @@ def apply_snapshot(
         session[LIVE_FEED_LAST_CURRENT_DRIVE_ID] = str(snapshot.current_feed_drive_id)
 
     apply_espn_game_date_to_session(session, str(snapshot.game_date or "").strip())
+    apply_espn_team_name_to_session(session, str(snapshot.coached_team_name or "").strip())
 
     detail = str(snapshot.status_detail or "").strip()
     eid = str(snapshot.external_game_id or "").strip()

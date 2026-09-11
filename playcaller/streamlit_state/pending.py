@@ -21,7 +21,10 @@ from playcaller.streamlit_state.keys import (
     PENDING_SESSION_GAME_DATE,
     PENDING_SESSION_GAME_DATE_REPLACE,
     PENDING_SESSION_SETUP_HYDRATE,
+    PENDING_SESSION_TEAM_NAME,
+    PENDING_SESSION_TEAM_NAME_REPLACE,
     SESSION_SETUP_GAME_DATE,
+    SESSION_SETUP_TEAM_NAME,
     UNDO_BUNDLE,
 )
 
@@ -91,6 +94,17 @@ def apply_pending_session_game_date(ss: MutableMapping[str, Any]) -> None:
     ss[SESSION_SETUP_GAME_DATE] = str(val).strip()
 
 
+def apply_pending_session_team_name(ss: MutableMapping[str, Any]) -> None:
+    """Set the team-name widget from ESPN when the operator has not typed one."""
+    val = ss.pop(PENDING_SESSION_TEAM_NAME, None)
+    replace = bool(ss.pop(PENDING_SESSION_TEAM_NAME_REPLACE, False))
+    if not val:
+        return
+    if str(ss.get(SESSION_SETUP_TEAM_NAME) or "").strip() and not replace:
+        return
+    ss[SESSION_SETUP_TEAM_NAME] = str(val).strip()
+
+
 def apply_pending_scoreboard_status(ss: MutableMapping[str, Any]) -> None:
     """Refresh the Game dropdown's scoreboard ``detail`` from the last successful sync."""
     patch = ss.pop(PENDING_SCOREBOARD_STATUS, None)
@@ -112,7 +126,8 @@ def apply_pending_scoreboard_status(ss: MutableMapping[str, Any]) -> None:
 def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     """
     Single entrypoint: load-JSON → quick-log advance → end-drive clock/possession →
-    new-game full reset → session-setup hydrate → ESPN session date → scoreboard status.
+    new-game full reset → session-setup hydrate → ESPN session date → ESPN team name →
+    scoreboard status.
 
     Order matters when multiple buffers are present (last writer wins on overlapping keys).
     Load JSON runs first so it can queue possession/session-setup pendings for this same call.
@@ -125,6 +140,7 @@ def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     apply_pending_new_game_ui(ss)
     apply_pending_session_setup_hydrate(ss)
     apply_pending_session_game_date(ss)
+    apply_pending_session_team_name(ss)
     apply_pending_scoreboard_status(ss)
 
 
