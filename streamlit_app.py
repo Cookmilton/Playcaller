@@ -70,7 +70,10 @@ import streamlit as st
 from playcaller import DriveLogger, FootballPlayPredictor, Game, GameContext
 from playcaller.game_situation_input import context_quarter_from_period, score_diff_from_board
 from playcaller.evaluation.snap_review_lifecycle import ensure_snap_review_list_on_game
-from playcaller.services.game_controller import sync_wind_slider_with_weather_pre_widgets
+from playcaller.services.game_controller import (
+    maybe_rerun_after_widgets,
+    sync_wind_slider_with_weather_pre_widgets,
+)
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     GAME_CONTEXT_QUARTER,
@@ -92,14 +95,24 @@ from playcaller.streamlit_state.widget_backend_bridge import (
 from playcaller.ui.main_console import render_main_content
 from playcaller.ui.sidebar import populate_sidebar_export_slot, render_sidebar
 
-st.set_page_config(
-    page_title="Play Caller",
-    page_icon="🏈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
-st.markdown("""
+def _init_session_state() -> None:
+    """Declare session defaults in one place (cold start and widget key safety)."""
+    ensure_play_caller_session_defaults(st.session_state)
+
+
+# AppTest and ``streamlit run`` exec this file as ``__main__``. ``import streamlit_app``
+# (boot-smoke) must not instantiate widgets — that leaves ``st.form`` on the DG stack.
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="Play Caller",
+        page_icon="🏈",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    st.markdown(
+        """
 <style>
   .block-container { padding-top: 1.5rem; }
   .stMetric label { font-size: 0.7rem !important; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -110,98 +123,96 @@ st.markdown("""
     color: #ffffff !important;
   }
 </style>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
-# ── Session state ────────────────────────────────────────────────────────────
+    # ── Session state ────────────────────────────────────────────────────────────
 
-reset_ui_write_guard()
+    reset_ui_write_guard()
 
-# Session / Game ordering (avoid metadata drift): defaults → pending merges → push session-setup
-# widgets onto ``game`` before sidebar, export, ESPN, or audit paths read ``session_metadata``.
-def _init_session_state() -> None:
-    """Declare session defaults in one place (cold start and widget key safety)."""
-    ensure_play_caller_session_defaults(st.session_state)
+    # Session / Game ordering (avoid metadata drift): defaults → pending merges → push session-setup
+    # widgets onto ``game`` before sidebar, export, ESPN, or audit paths read ``session_metadata``.
+    _init_session_state()
 
+    # Merge pending UI before any ``key="ui_*"`` widgets render (Streamlit forbids mutating widget keys mid-run).
+    apply_all_pending(st.session_state)
+    # ``game_*`` backend mirrors ↔ ``ui_*`` (hydrate after ESPN / load JSON, else push widgets → backend).
+    reconcile_widget_and_backend_state(st.session_state)
+    log_development_mirror_audit()
 
-_init_session_state()
+    predictor = st.session_state.predictor
+    drive_log = st.session_state.drive_log
+    game = st.session_state.game
+    ensure_snap_review_list_on_game(game)
+    apply_session_setup_widgets_to_game(game, st.session_state)
+    # Possession from the sidebar radio (prior run's value). Applied here so **New drive** / captions see it.
+    apply_possession_from_ui(game, st.session_state)
 
-# Merge pending UI before any ``key="ui_*"`` widgets render (Streamlit forbids mutating widget keys mid-run).
-apply_all_pending(st.session_state)
-# ``game_*`` backend mirrors ↔ ``ui_*`` (hydrate after ESPN / load JSON, else push widgets → backend).
-reconcile_widget_and_backend_state(st.session_state)
-log_development_mirror_audit()
+    # Wind: sync before sidebar + ``on_change`` on weather when leaving "wind" (see ``game_controller``).
+    sync_wind_slider_with_weather_pre_widgets()
 
-predictor = st.session_state.predictor
-drive_log = st.session_state.drive_log
-game = st.session_state.game
-ensure_snap_review_list_on_game(game)
-apply_session_setup_widgets_to_game(game, st.session_state)
-# Possession from the sidebar radio (prior run's value). Applied here so **New drive** / captions see it.
-apply_possession_from_ui(game, st.session_state)
+    sidebar_generate, sidebar_export_slot = render_sidebar(game=game, drive_log=drive_log)
 
-# Wind: sync before sidebar + ``on_change`` on weather when leaving "wind" (see ``game_controller``).
-sync_wind_slider_with_weather_pre_widgets()
+    # Sidebar may replace ``st.session_state.game`` (e.g. **Load game JSON** without rerun in edge paths).
+    # Always re-bind so Generate / Log / Export mutate and read the **same** object as session state.
+    game = st.session_state.game
+    ensure_snap_review_list_on_game(game)
+    drive_log = st.session_state.drive_log
+    apply_session_setup_widgets_to_game(game, st.session_state)
+    apply_possession_from_ui(game, st.session_state)
 
-sidebar_generate, sidebar_export_slot = render_sidebar(game=game, drive_log=drive_log)
+    # Copy operator edits into ``game_*`` (safe: only non-widget backend keys are written).
+    sync_backend_from_widgets(st.session_state)
+    refresh_derived_game_context_cache(st.session_state)
 
-# Sidebar may replace ``st.session_state.game`` (e.g. **Load game JSON** without rerun in edge paths).
-# Always re-bind so Generate / Log / Export mutate and read the **same** object as session state.
-game = st.session_state.game
-ensure_snap_review_list_on_game(game)
-drive_log = st.session_state.drive_log
-apply_session_setup_widgets_to_game(game, st.session_state)
-apply_possession_from_ui(game, st.session_state)
+    # Pull the latest UI state (``.get`` mirrors :func:`new_game_ui_values` so missing keys never 500).
+    _ui = new_game_ui_values()
+    down = int(st.session_state.get("ui_down", _ui["ui_down"]))
+    distance = int(st.session_state.get("ui_distance", _ui["ui_distance"]))
+    territory = str(st.session_state.get("ui_territory", _ui["ui_territory"]))
+    yardline = int(st.session_state.get("ui_yardline", _ui["ui_yardline"]))
+    def_personnel = str(st.session_state.get("ui_def_personnel", _ui["ui_def_personnel"]))
+    box_count = int(st.session_state.get("ui_box_count", _ui["ui_box_count"]))
+    coverage_shell = str(st.session_state.get("ui_coverage_shell", _ui["ui_coverage_shell"]))
+    safeties = str(st.session_state.get("ui_safeties", _ui["ui_safeties"]))
+    blitz_likely = bool(st.session_state.get("ui_blitz_likely", _ui["ui_blitz_likely"]))
+    period = int(st.session_state.get("ui_game_period", 1))
+    quarter = int(st.session_state.get(GAME_CONTEXT_QUARTER, context_quarter_from_period(period)))
+    seconds_remaining = int(st.session_state.get(GAME_CLOCK_TOTAL_SECONDS, 0))
+    # Scoreboard: backend mirrors updated from widgets above (and by ESPN / load before hydrate).
+    game.offense_points = int(st.session_state.get(GAME_SCORE_OURS, 0))
+    game.defense_points = int(st.session_state.get(GAME_SCORE_THEIRS, 0))
+    score_diff = score_diff_from_board(our_score=game.offense_points, their_score=game.defense_points)
+    game.quarter = quarter
+    game.clock_seconds_remaining = seconds_remaining
+    own_timeouts = int(st.session_state.get("ui_own_tos", _ui["ui_own_tos"]))
+    opp_timeouts = int(st.session_state.get("ui_opp_tos", _ui["ui_opp_tos"]))
+    weather = str(st.session_state.get("ui_weather", _ui["ui_weather"]))
+    wind_mph = int(st.session_state.get("ui_wind_mph", _ui["ui_wind_mph"])) if weather == "wind" else 0
+    qb_limited = bool(st.session_state.get("ui_qb_limited", _ui["ui_qb_limited"]))
+    game_mode = str(st.session_state.get("ui_game_mode", _ui["ui_game_mode"]))
+    mismatch = str(st.session_state.get("ui_mismatch", _ui["ui_mismatch"]))
 
-# Copy operator edits into ``game_*`` (safe: only non-widget backend keys are written).
-sync_backend_from_widgets(st.session_state)
-refresh_derived_game_context_cache(st.session_state)
+    ctx = GameContext(
+        down=down, distance=distance, yardline=yardline, territory=territory,
+        def_personnel=def_personnel, box_count=box_count, coverage_shell=coverage_shell,
+        blitz_likely=blitz_likely, safeties=safeties,
+        score_diff=score_diff, quarter=quarter, seconds_remaining=seconds_remaining,
+        own_timeouts=own_timeouts, opp_timeouts=opp_timeouts,
+        weather=weather, wind_mph=wind_mph, qb_limited=qb_limited,
+        mismatch=mismatch or None, game_mode=game_mode,
+        plays_this_drive=len(drive_log.results),
+        shown_concepts=list(drive_log.family_counts.keys()),
+        run_plays_this_drive=drive_log.run_count(),
+    )
 
-# Pull the latest UI state (``.get`` mirrors :func:`new_game_ui_values` so missing keys never 500).
-_ui = new_game_ui_values()
-down = int(st.session_state.get("ui_down", _ui["ui_down"]))
-distance = int(st.session_state.get("ui_distance", _ui["ui_distance"]))
-territory = str(st.session_state.get("ui_territory", _ui["ui_territory"]))
-yardline = int(st.session_state.get("ui_yardline", _ui["ui_yardline"]))
-def_personnel = str(st.session_state.get("ui_def_personnel", _ui["ui_def_personnel"]))
-box_count = int(st.session_state.get("ui_box_count", _ui["ui_box_count"]))
-coverage_shell = str(st.session_state.get("ui_coverage_shell", _ui["ui_coverage_shell"]))
-safeties = str(st.session_state.get("ui_safeties", _ui["ui_safeties"]))
-blitz_likely = bool(st.session_state.get("ui_blitz_likely", _ui["ui_blitz_likely"]))
-period = int(st.session_state.get("ui_game_period", 1))
-quarter = int(st.session_state.get(GAME_CONTEXT_QUARTER, context_quarter_from_period(period)))
-seconds_remaining = int(st.session_state.get(GAME_CLOCK_TOTAL_SECONDS, 0))
-# Scoreboard: backend mirrors updated from widgets above (and by ESPN / load before hydrate).
-game.offense_points = int(st.session_state.get(GAME_SCORE_OURS, 0))
-game.defense_points = int(st.session_state.get(GAME_SCORE_THEIRS, 0))
-score_diff = score_diff_from_board(our_score=game.offense_points, their_score=game.defense_points)
-game.quarter = quarter
-game.clock_seconds_remaining = seconds_remaining
-own_timeouts = int(st.session_state.get("ui_own_tos", _ui["ui_own_tos"]))
-opp_timeouts = int(st.session_state.get("ui_opp_tos", _ui["ui_opp_tos"]))
-weather = str(st.session_state.get("ui_weather", _ui["ui_weather"]))
-wind_mph = int(st.session_state.get("ui_wind_mph", _ui["ui_wind_mph"])) if weather == "wind" else 0
-qb_limited = bool(st.session_state.get("ui_qb_limited", _ui["ui_qb_limited"]))
-game_mode = str(st.session_state.get("ui_game_mode", _ui["ui_game_mode"]))
-mismatch = str(st.session_state.get("ui_mismatch", _ui["ui_mismatch"]))
-
-ctx = GameContext(
-    down=down, distance=distance, yardline=yardline, territory=territory,
-    def_personnel=def_personnel, box_count=box_count, coverage_shell=coverage_shell,
-    blitz_likely=blitz_likely, safeties=safeties,
-    score_diff=score_diff, quarter=quarter, seconds_remaining=seconds_remaining,
-    own_timeouts=own_timeouts, opp_timeouts=opp_timeouts,
-    weather=weather, wind_mph=wind_mph, qb_limited=qb_limited,
-    mismatch=mismatch or None, game_mode=game_mode,
-    plays_this_drive=len(drive_log.results),
-    shown_concepts=list(drive_log.family_counts.keys()),
-    run_plays_this_drive=drive_log.run_count(),
-)
-
-render_main_content(
-    ctx=ctx,
-    game=game,
-    drive_log=drive_log,
-    predictor=predictor,
-    sidebar_generate=sidebar_generate,
-)
-populate_sidebar_export_slot(sidebar_export_slot)
+    render_main_content(
+        ctx=ctx,
+        game=game,
+        drive_log=drive_log,
+        predictor=predictor,
+        sidebar_generate=sidebar_generate,
+    )
+    populate_sidebar_export_slot(sidebar_export_slot)
+    maybe_rerun_after_widgets()

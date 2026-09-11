@@ -32,6 +32,9 @@ PENDING_END_DRIVE_UI = "pending_end_drive_ui"
 PENDING_NEW_GAME_UI = "pending_new_game_ui"
 # Queue ``hydrate_session_setup_widgets`` for the next run (before those widgets instantiate).
 PENDING_SESSION_SETUP_HYDRATE = "pending_session_setup_hydrate"
+# Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
+# treats ``st.rerun()`` as a completed run and drops widget keys that never instantiated.
+PENDING_RERUN_AFTER_WIDGETS = "pending_rerun_after_widgets"
 
 # --- Snap / undo (not pending dicts; cleared with in-progress log helpers) ---
 LAST_DRIVE_SNAP_CONTEXT = "last_drive_snap_context"

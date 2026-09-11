@@ -7,11 +7,10 @@ that need ``st.session_state`` and re-exports the rest for existing call sites.
 
 ``Game.possession`` is ``offense`` | ``defense`` | ``None``. A fresh / new-game board
 starts unset. Sidebar possession is three chips (``Not set`` | ``Our team`` |
-``Opponent``) that write ``ui_possession_side`` via ``apply_and_rerun`` — the same
-pattern as down/distance. Do not bind it as ``st.radio`` / ``st.selectbox``:
-Streamlit 1.56 reports those widgets' defaults when another chip is clicked, and
-only keys ``apply_and_rerun`` writes survive. ``Game.possession`` stays ``None``
-while the chip shows ``Not set``.
+``Opponent``) that write ``ui_possession_side`` via ``apply_and_rerun``. That key
+is not widget-bound (a radio here used to reset when another chip called
+``st.rerun()`` mid-sidebar). Chip clicks now defer the rerun until every widget
+has registered. ``Game.possession`` stays ``None`` while the chip shows ``Not set``.
 """
 
 from __future__ import annotations

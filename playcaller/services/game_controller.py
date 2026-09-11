@@ -43,6 +43,7 @@ from playcaller.streamlit_state.keys import (
     LAST_DRIVE_SNAP_CONTEXT,
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
+    PENDING_RERUN_AFTER_WIDGETS,
     UI_HISTORICAL_NUDGE_ENABLED,
     UI_WAREHOUSE_ADVISORY_ENABLED,
     UI_WAREHOUSE_LAST_GENERATE_STATUS,
@@ -128,11 +129,27 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     st.session_state.eval_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0)) + 1
 
 
+def request_rerun_after_widgets() -> None:
+    """Finish this script run so every widget registers, then rerun.
+
+    Mid-script ``st.rerun()`` raises ``RerunException`` with ``premature_stop=False``,
+    so Streamlit's ``SessionState.on_script_finished`` removes keys for widgets that
+    never instantiated (everything below the chip that fired).
+    """
+    st.session_state[PENDING_RERUN_AFTER_WIDGETS] = True
+
+
+def maybe_rerun_after_widgets() -> None:
+    """Call once at the end of ``streamlit_app.py`` after sidebar + main widgets."""
+    if st.session_state.pop(PENDING_RERUN_AFTER_WIDGETS, False):
+        st.rerun()
+
+
 def apply_and_rerun(**kwargs: Any) -> None:
     for k, v in kwargs.items():
         assign_session_state(st.session_state, k, v, context="apply_and_rerun")
     mark_board_origin_manual(st.session_state)
-    st.rerun()
+    request_rerun_after_widgets()
 
 
 def preset_snap_only(
@@ -156,7 +173,7 @@ def preset_snap_only(
     if auto_generate:
         assign_session_state(st.session_state, "ui_auto_generate", True, context="preset_snap_only")
     if rerun:
-        st.rerun()
+        request_rerun_after_widgets()
 
 
 def preset_two_minute_drill(*, auto_generate: bool = True, rerun: bool = False) -> None:
@@ -175,7 +192,7 @@ def preset_two_minute_drill(*, auto_generate: bool = True, rerun: bool = False) 
     if auto_generate:
         assign_session_state(st.session_state, "ui_auto_generate", True, context="preset_two_minute_drill")
     if rerun:
-        st.rerun()
+        request_rerun_after_widgets()
 
 
 def undo_last_logged_play() -> None:
