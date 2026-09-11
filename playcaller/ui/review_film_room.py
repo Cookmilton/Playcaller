@@ -58,6 +58,7 @@ from playcaller.review_insights.comparison_format import (
     format_actual_comparison_line,
 )
 from playcaller.review_insights.models import DriveGrade, PlayMistake
+from playcaller.services.game_controller import request_rerun_after_widgets
 from playcaller.streamlit_state.session import coached_team_espn_id_for_previous_drives
 from playcaller.ui.format_play_context import format_play_context
 from playcaller.ui.previous_drives_render import render_drive_score_ribbon, render_score_reconciliation_strip
@@ -267,7 +268,7 @@ def render_patterns_section(game: Game, rows: Sequence[UnifiedReviewRow]) -> Non
                             help=f"Focus drive {di + 1}",
                         ):
                             st.session_state[FILM_ROOM_FOCUS_DRIVE] = int(di)
-                            st.rerun()
+                            request_rerun_after_widgets()
 
 
 def render_top_mistakes_section(mistakes: Sequence[PlayMistake]) -> None:
@@ -292,7 +293,7 @@ def render_top_mistakes_section(mistakes: Sequence[PlayMistake]) -> None:
         ):
             st.session_state[FILM_ROOM_FOCUS_DRIVE] = int(m.drive_id)
             st.session_state[FILM_ROOM_FOCUS_PLAY] = (int(m.drive_id), int(m.play_number))
-            st.rerun()
+            request_rerun_after_widgets()
         st.divider()
 
 
@@ -375,7 +376,7 @@ def render_game_story_section(game: Game, rows: Sequence[UnifiedReviewRow]) -> N
                 with btn_cols[j]:
                     if st.button(f"{di + 1}", key=f"story_nav_{bi}_{di}", help=f"Focus drive {di + 1}"):
                         st.session_state[FILM_ROOM_FOCUS_DRIVE] = int(di)
-                        st.rerun()
+                        request_rerun_after_widgets()
 
 
 def _drive_header(

@@ -60,7 +60,7 @@ NON_DEFAULT_VALUES: Dict[str, Any] = {
     "ui_live_pick_event_id": "401872657",
 }
 
-WIDGET_KINDS = ("radio", "selectbox", "slider", "number_input", "toggle")
+WIDGET_KINDS = ("radio", "selectbox", "slider", "number_input", "toggle", "multiselect")
 
 
 def _widget(at: AppTest, key: str):

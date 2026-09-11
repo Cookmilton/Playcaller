@@ -11,6 +11,7 @@ import streamlit as st
 
 from football_history_warehouse.consumer import FootballWarehouseClient, GameInventoryFilters, PageParams
 
+from playcaller.services.game_controller import request_rerun_after_widgets
 from playcaller.ui.product_copy import REVIEW_WAREHOUSE_EMPTY_PROCESSED, WAREHOUSE_PAGE_INTRO
 from playcaller.ui.warehouse_page_state import (
     WarehouseInventoryState,
@@ -168,7 +169,7 @@ def _render_processed_json_audit_panel() -> None:
             help="Re-scan all JSON in this filter on disk. Also use after editing files outside the app.",
         ):
             st.session_state["wh_audit_refresh_nonce"] = int(st.session_state.get("wh_audit_refresh_nonce") or 0) + 1
-            st.rerun()
+            request_rerun_after_widgets()
     season_f: int | None = None
     week_f: int | None = None
     if season_s != "all":
@@ -477,11 +478,11 @@ def _render_warehouse_inventory_body(ctx: WarehousePageContext, client: Football
     with p1:
         if st.button("← Previous page", disabled=offset <= 0, key="wh_inventory_prev"):
             st.session_state["wh_inventory_offset"] = max(0, offset - limit_clamped)
-            st.rerun()
+            request_rerun_after_widgets()
     with p2:
         if st.button("Next page →", disabled=not page.has_more, key="wh_inventory_next"):
             st.session_state["wh_inventory_offset"] = offset + limit_clamped
-            st.rerun()
+            request_rerun_after_widgets()
     with p3:
         page_num = offset // limit_clamped + 1
         st.caption(f"Offset **{offset}** · page size **{limit_clamped}** · page **{page_num}**")

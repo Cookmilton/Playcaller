@@ -34,6 +34,7 @@ from playcaller.streamlit_state.session import (
     ensure_play_caller_session_defaults,
 )
 from playcaller.streamlit_state.ui_write_guard import reset_ui_write_guard
+from playcaller.services.game_controller import maybe_rerun_after_widgets
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
 from playcaller.streamlit_state.widget_backend_bridge import reconcile_widget_and_backend_state
 from playcaller.review.archived_replay_juxtapose import build_ambient_context_for_model_replay
@@ -266,6 +267,8 @@ def run_review_session_page() -> None:
             ev = evaluate_audit_records(timeline)
             st.text(summarize_audit_session(timeline, session_metadata=game.session_metadata))
             st.json(ev)
+
+    maybe_rerun_after_widgets()
 
 
 if _review_session_should_execute():

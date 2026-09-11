@@ -140,7 +140,7 @@ def request_rerun_after_widgets() -> None:
 
 
 def maybe_rerun_after_widgets() -> None:
-    """Call once at the end of ``streamlit_app.py`` after sidebar + main widgets."""
+    """Call once at the end of each Streamlit page after every keyed widget has instantiated."""
     if st.session_state.pop(PENDING_RERUN_AFTER_WIDGETS, False):
         st.rerun()
 
@@ -234,16 +234,18 @@ def sync_wind_slider_with_weather_pre_widgets() -> None:
 
 
 def on_ui_weather_changed() -> None:
-    """Zero wind on the *next* run — do not write ``ui_wind_mph`` here.
+    """Zero wind when leaving the wind weather — legal in a widget callback.
 
-    The weather selectbox is instantiated immediately before the wind slider
-    (``sidebar.py``). Streamlit 1.56 still treats ``ui_wind_mph`` as bound when
-    this ``on_change`` fires, so a same-run write trips the widget-key guard.
-    ``sync_wind_slider_with_weather_pre_widgets`` runs before widgets and
-    applies the zero.
+    Streamlit 1.56 runs ``on_change`` in ``SessionState.on_script_will_rerun``
+    *before* this script instantiates widgets, so writing ``ui_wind_mph`` here
+    is allowed. The app ``assign_session_state`` guard is over-strict in that
+    window (bound keys from the previous run are not cleared until
+    ``reset_ui_write_guard``), so this uses a direct session write.
+    ``sync_wind_slider_with_weather_pre_widgets`` still covers load/new-game
+    paths that never fire this callback.
     """
     if str(st.session_state.get("ui_weather", "clear")) != "wind":
-        request_rerun_after_widgets()
+        st.session_state["ui_wind_mph"] = 0
 
 
 def resolve_historical_plays_for_generate(ss: MutableMapping[str, Any]) -> Optional[Any]:

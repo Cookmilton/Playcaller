@@ -22,6 +22,7 @@ from playcaller.live_data.espn_football import parse_espn_summary
 from playcaller.live_data.types import FetchResult
 from playcaller.streamlit_state.keys import LIVE_FEED_SCOREBOARD_ROWS, LIVE_FEED_TEAM_SCOPE
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
+from playcaller.ui.helpers import LOG_OUTCOME_OPTIONS, LOG_TARGET_OPTIONS
 from tests.test_widget_state_retention import (
     APP_FILE,
     SCOREBOARD_ROWS,
@@ -147,10 +148,7 @@ def test_end_drive_keeps_unmirrored(seeded_unmirrored: AppTest) -> None:
     assert _values(at, UNMIRRORED) == UNMIRRORED
 
 
-def test_generate_keeps_unmirrored(seeded_unmirrored: AppTest) -> None:
-    at = seeded_unmirrored
-    at.button(key="sidebar_chip_poss_our").click().run()
-    assert not at.exception, at.exception
+def _click_generate(at: AppTest) -> None:
     submit = None
     for w in list(at.button) + list(getattr(at, "form_submit_button", [])):
         if getattr(w, "key", None) == "sidebar_form_submit_generate":
@@ -159,25 +157,56 @@ def test_generate_keeps_unmirrored(seeded_unmirrored: AppTest) -> None:
     assert submit is not None, "Generate submit button did not render"
     submit.click().run()
     assert not at.exception, at.exception
+
+
+def test_generate_keeps_unmirrored(seeded_unmirrored: AppTest) -> None:
+    at = seeded_unmirrored
+    at.button(key="sidebar_chip_poss_our").click().run()
+    assert not at.exception, at.exception
+    _click_generate(at)
     assert _values(at, UNMIRRORED) == UNMIRRORED
 
 
 def test_log_and_undo_keep_unmirrored(seeded_unmirrored: AppTest) -> None:
     at = seeded_unmirrored
     at.button(key="sidebar_chip_poss_our").click().run()
-    submit = None
-    for w in list(at.button) + list(getattr(at, "form_submit_button", [])):
-        if getattr(w, "key", None) == "sidebar_form_submit_generate":
-            submit = w
-            break
-    assert submit is not None
-    submit.click().run()
-    assert not at.exception, at.exception
+    _click_generate(at)
     at.button(key="main_log_yards_0").click().run()
     assert not at.exception, at.exception
     assert _values(at, UNMIRRORED) == UNMIRRORED
     at.button(key="sidebar_undo_last_play").click().run()
     assert not at.exception, at.exception
+    assert _values(at, UNMIRRORED) == UNMIRRORED
+
+
+def test_log_and_undo_keep_outcome_target_custom_yards(seeded_unmirrored: AppTest) -> None:
+    """Log-result dropdowns and custom yards sit below the log buttons; they must survive rerun."""
+    at = seeded_unmirrored
+    at.button(key="sidebar_chip_poss_our").click().run()
+    _click_generate(at)
+    outcome = "Incomplete pass"
+    target = "X"
+    assert outcome in LOG_OUTCOME_OPTIONS
+    assert target in LOG_TARGET_OPTIONS
+    log_widgets = {
+        "main_log_semantic_outcome": outcome,
+        "main_log_semantic_target": target,
+        "main_log_custom_yards_value": 7,
+    }
+    for key, value in log_widgets.items():
+        _widget(at, key).set_value(value)
+    at.run()
+    assert not at.exception, at.exception
+    assert _values(at, log_widgets) == log_widgets
+    at.button(key="main_log_yards_custom_submit").click().run()
+    assert not at.exception, at.exception
+    assert _values(at, log_widgets) == log_widgets
+    at.button(key="sidebar_undo_last_play").click().run()
+    assert not at.exception, at.exception
+    assert _values(at, UNMIRRORED) == UNMIRRORED
+    # Log widgets unmount when ``result`` clears; Streamlit drops their keys. Re-generate
+    # and confirm the deferred undo rerun did not also wipe unmirrored board widgets.
+    _click_generate(at)
     assert _values(at, UNMIRRORED) == UNMIRRORED
 
 
@@ -195,14 +224,10 @@ def test_seeding_weather_rain_does_not_warn_on_wind_write(caplog: pytest.LogCapt
     assert illegal == [], [r.getMessage() for r in illegal]
 
 
-# Files that still call ``st.rerun()`` on purpose: the post-widget helper, plus other
-# Streamlit pages / the legacy ``app.py`` that are not on the live-console deferred path.
+# The only remaining ``st.rerun()`` is the post-widget helper. Other pages queue
+# ``PENDING_RERUN_AFTER_WIDGETS`` and call ``maybe_rerun_after_widgets`` at page end.
 _RERUN_ALLOWLIST = {
     ("playcaller/services/game_controller.py", "maybe_rerun_after_widgets"),
-    ("playcaller/ui/review_film_room.py", None),
-    ("playcaller/ui/warehouse_review.py", None),
-    ("playcaller/ui/history_validation.py", None),
-    ("app.py", None),
 }
 
 

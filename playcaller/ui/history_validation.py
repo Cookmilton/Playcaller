@@ -50,6 +50,7 @@ from playcaller.streamlit_state.keys import (
     HV_SESSION_CORPUS_KEY,
     HV_SESSION_CORPUS_PATH_KEY,
 )
+from playcaller.services.game_controller import request_rerun_after_widgets
 from playcaller.ui.live_session_context import build_game_context_from_session_state
 from playcaller.ui.product_copy import HISTORY_PAGE_TITLE
 
@@ -216,7 +217,7 @@ def _render_last_ingest_banner(ss: Mapping[str, Any]) -> None:
             help="Hide this import result from the page. The repository is unchanged; a new import shows a fresh summary.",
         ):
             ss.pop(_SESSION_LAST_INGEST, None)
-            st.rerun()
+            request_rerun_after_widgets()
     found = int(summary.get("files_found", 0) or 0)
     imp = int(summary.get("files_imported", 0) or 0)
     rej = int(summary.get("files_rejected", 0) or 0)
@@ -292,7 +293,7 @@ def _render_import_tab(repo_root, settings) -> None:
                 batch_reports.append(ingest_file_bytes(repo_root, json_pairs, source_kind="upload", label=note))
             if batch_reports:
                 _store_ingest_summary(st.session_state, batch_reports, repo_root)
-            st.rerun()
+            request_rerun_after_widgets()
 
     st.divider()
     st.markdown("#### Optional: folder on disk")
@@ -318,7 +319,7 @@ def _render_import_tab(repo_root, settings) -> None:
                     label=note2,
                 )
                 _store_ingest_summary(st.session_state, [rep], repo_root)
-                st.rerun()
+                request_rerun_after_widgets()
 
 
 def _render_library_tab(repo_root) -> None:
@@ -477,7 +478,7 @@ def _render_library_tab(repo_root) -> None:
         )
         if ok:
             st.success("Metadata saved.")
-            st.rerun()
+            request_rerun_after_widgets()
         else:
             st.error("Update failed (game id not found).")
 
