@@ -12,7 +12,7 @@ import html
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
-from playcaller.game_situation_input import format_ball_spot, format_down_distance
+from playcaller.game_situation_input import format_ball_spot, format_down_distance, period_display_label
 from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN
 from playcaller.streamlit_state.possession import (
     GENERATE_OPPONENT_REASON,
@@ -45,7 +45,11 @@ _BOARD_FIELD_LABEL = {
     "down": "Down",
     "distance": "Distance",
     "field_position": "Field position",
+    "quarter": "Quarter",
+    "clock": "Clock",
 }
+
+_CLOCK_BOARD_FIELDS = frozenset({"quarter", "clock"})
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,8 @@ class SituationHonesty:
     possession: HonestField
     own_timeouts: HonestField
     opp_timeouts: HonestField
+    quarter: HonestField
+    clock: HonestField
     generate_blocked_reason: Optional[str]
     unsynced_board_warning: Optional[str]
 
@@ -77,6 +83,8 @@ class SituationHonesty:
             self.possession,
             self.own_timeouts,
             self.opp_timeouts,
+            self.quarter,
+            self.clock,
         ):
             if fld.synced or not fld.reason:
                 continue
@@ -152,6 +160,8 @@ def field_is_not_synced(
     reason = skipped.get(field)
     if reason == _SKIP_LOCKED:
         return False
+    if field in _CLOCK_BOARD_FIELDS:
+        return field in skipped
     if situation_source is None:
         return True
     return field in skipped
@@ -169,7 +179,7 @@ def unsynced_board_warning(
 ) -> Optional[str]:
     missing = [
         _BOARD_FIELD_LABEL[f]
-        for f in ("down", "distance", "field_position")
+        for f in ("down", "distance", "field_position", "quarter", "clock")
         if field_is_not_synced(
             f, origin=origin, situation_source=situation_source, skipped=skipped
         )
@@ -213,6 +223,8 @@ def honesty_from_session(
     yardline: int,
     own_timeouts: int,
     opp_timeouts: int,
+    period: int = 1,
+    seconds_in_quarter: int = 15 * 60,
 ) -> SituationHonesty:
     from playcaller.streamlit_state.keys import LIVE_FEED_LAST_AUDIT, LIVE_FEED_LAST_ORIGIN
 
@@ -235,6 +247,8 @@ def honesty_from_session(
         yardline=yardline,
         own_timeouts=own_timeouts,
         opp_timeouts=opp_timeouts,
+        period=period,
+        seconds_in_quarter=seconds_in_quarter,
     )
 
 
@@ -250,6 +264,8 @@ def build_situation_honesty(
     yardline: int,
     own_timeouts: int,
     opp_timeouts: int,
+    period: int = 1,
+    seconds_in_quarter: int = 15 * 60,
 ) -> SituationHonesty:
     src = str(situation_source).strip() if situation_source else None
     down_f = _field(
@@ -295,6 +311,22 @@ def build_situation_honesty(
         situation_source=src,
         skipped=skipped,
     )
+    sec = max(0, int(seconds_in_quarter))
+    m, s = divmod(sec, 60)
+    quarter_f = _field(
+        "quarter",
+        period_display_label(int(period)),
+        origin=origin,
+        situation_source=src,
+        skipped=skipped,
+    )
+    clock_f = _field(
+        "clock",
+        f"{m}:{s:02d} left",
+        origin=origin,
+        situation_source=src,
+        skipped=skipped,
+    )
     return SituationHonesty(
         source_chip=situation_source_chip_label(origin=origin, situation_source=src),
         down=down_f,
@@ -303,6 +335,8 @@ def build_situation_honesty(
         possession=poss_f,
         own_timeouts=own_f,
         opp_timeouts=opp_f,
+        quarter=quarter_f,
+        clock=clock_f,
         generate_blocked_reason=generate_blocked_reason_for_possession(possession),
         unsynced_board_warning=unsynced_board_warning(
             origin=origin, situation_source=src, skipped=skipped
@@ -339,13 +373,24 @@ def source_chip_html(label: str) -> str:
     )
 
 
+def clock_phrase_from_honesty(honesty: SituationHonesty) -> str:
+    q = honesty.quarter.text if honesty.quarter.synced else NOT_SYNCED_TEXT
+    c = honesty.clock.text if honesty.clock.synced else NOT_SYNCED_TEXT
+    return f"{q} · {c}"
+
+
+def clock_line_html(honesty: SituationHonesty) -> str:
+    return f"{honest_field_html(honesty.quarter)} · {honest_field_html(honesty.clock)}"
+
+
 def honest_summary_line(
     *,
-    clock_phrase: str,
+    clock_phrase: str | None = None,
     our_score: int,
     their_score: int,
     honesty: SituationHonesty,
 ) -> str:
+    clock = clock_phrase if clock_phrase is not None else clock_phrase_from_honesty(honesty)
     ball = honesty.field_position.text if honesty.field_position.synced else NOT_SYNCED_TEXT
     if honesty.down.synced and honesty.distance.synced:
         dd = format_down_distance(int(honesty.down.text), int(honesty.distance.text))

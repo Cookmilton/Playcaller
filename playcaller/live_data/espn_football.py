@@ -256,7 +256,9 @@ def parse_espn_summary(
     notes: List[str] = []
     quarter, period_notes = infer_espn_period(status)
     notes.extend(list(period_notes))
-    clock_seconds_in_period, clock_notes, clock_resolution = resolve_espn_clock_seconds(payload, status)
+    clock_seconds_in_period, clock_notes, clock_resolution = resolve_espn_clock_seconds(
+        payload, status, is_final=is_final
+    )
     notes.extend(list(clock_notes))
     for flag in snapshot_state_sanity_flags(
         quarter=quarter,

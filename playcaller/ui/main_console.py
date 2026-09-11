@@ -7,7 +7,6 @@ import html
 import streamlit as st
 
 from playcaller import FootballPlayPredictor, Game, GameContext, DriveLogger, format_actual_play_result_description
-from playcaller.game_situation_input import format_clock_left_in_quarter
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
 from playcaller.services.game_controller import (
     archive_current_drive_and_reset_session,
@@ -40,6 +39,7 @@ from playcaller.ui.recommendations import render_recommendation_panel
 from playcaller.ui.situation_honesty import (
     defense_look_chip_label,
     down_distance_html,
+    clock_line_html,
     honest_field_html,
     honest_summary_line,
     honesty_from_session,
@@ -115,10 +115,10 @@ def render_main_content(
         yardline=yardline,
         own_timeouts=own_timeouts,
         opp_timeouts=opp_timeouts,
+        period=period_ui,
+        seconds_in_quarter=seconds_remaining,
     )
-    clock_phrase = format_clock_left_in_quarter(period=period_ui, seconds_in_quarter=seconds_remaining)
     sit_line = honest_summary_line(
-        clock_phrase=clock_phrase,
         our_score=ours,
         their_score=theirs,
         honesty=honesty,
@@ -228,7 +228,7 @@ def render_main_content(
         f'<div style="margin-top:8px;font-size:0.95rem;color:#94a3b8;line-height:1.5">'
         f'<strong style="color:#e2e8f0">Score</strong> {sc_lbl} '
         f'<span style="color:#475569">(margin {margin_lbl})</span>'
-        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">Clock</strong> {html.escape(clock_phrase)}'
+        f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">Clock</strong> {clock_line_html(honesty)}'
         f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">{honest_field_html(honesty.possession)}</strong>'
         f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">TOs</strong> {timeouts_html(honesty)}'
         f' &nbsp;·&nbsp; <strong style="color:#e2e8f0">This drive</strong> {len(drive_log.results)} play(s)'
