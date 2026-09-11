@@ -31,6 +31,8 @@ class FeedCompletedDrive:
     team_abbreviation: str = ""
     team_display_name: str = ""
     feed_audit: Optional[DriveFeedAuditSnapshot] = None
+    # Ordered ESPN play dicts from :func:`playcaller.live_data.espn_drive_plays.feed_drive_plays`.
+    raw_plays: Tuple[Dict[str, Any], ...] = ()
 
 
 @dataclass

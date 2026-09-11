@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 from playcaller.domain import ActualPlayResult
 
 from .espn_drive_audit_parse import parse_drive_feed_audit_from_espn_drive_dict
+from .espn_drive_plays import feed_drive_plays
 from .espn_play_normalize import espn_play_to_actual, validate_actual_for_engine
 from .espn_summary_teams import team_label_pair, team_labels_from_espn_summary
 from .types import FeedCompletedDrive
@@ -59,7 +60,10 @@ def extract_completed_drives_from_espn_payload(
     for i, raw in enumerate(prev):
         if not isinstance(raw, dict):
             continue
-        plays_raw = raw.get("plays") or []
+        did = str(raw.get("id") or "").strip()
+        plays_raw = feed_drive_plays(payload, did) if did else [
+            p for p in (raw.get("plays") or []) if isinstance(p, dict)
+        ]
         normalized: List[ActualPlayResult] = []
         for pr in plays_raw:
             if not isinstance(pr, dict):
@@ -84,6 +88,7 @@ def extract_completed_drives_from_espn_payload(
                 team_abbreviation=abbr,
                 team_display_name=disp,
                 feed_audit=audit,
+                raw_plays=tuple(dict(p) for p in plays_raw if isinstance(p, dict)),
             )
         )
 

@@ -12,6 +12,7 @@ from .espn_game_state import (
     resolve_espn_clock_seconds,
     snapshot_state_sanity_flags,
 )
+from .espn_drive_plays import feed_drive_plays
 from .espn_game_date import resolve_espn_game_date
 from .espn_play_text_players import play_text_from_espn_row
 from .espn_situation import resolve_espn_situation, situation_timeouts_for_coached_team
@@ -178,7 +179,10 @@ def list_espn_scoreboard_games(
 
 
 def _current_feed_drive_play_dicts(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], ...]:
-    """Shallow-copy ``drives.current.plays`` for stable snapshot merge (in-progress drive only)."""
+    """``drives.current`` plays via :func:`feed_drive_plays` (in-progress drive only)."""
+    did = _current_feed_drive_id(payload)
+    if did:
+        return tuple(feed_drive_plays(payload, did))
     drives = payload.get("drives") or {}
     current = drives.get("current")
     if not isinstance(current, dict):

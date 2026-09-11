@@ -125,6 +125,16 @@ def top_up_open_drive_log_from_completed_drives(
     fd = matching_completed_drive_for_open_log(drive_log, completed)
     if fd is None:
         return 0
+    raw = tuple(fd.raw_plays) if fd.raw_plays else ()
+    if raw:
+        debug: List[str] = []
+        return merge_current_espn_plays_into_drive_log(
+            drive_log=drive_log,
+            seen_play_ids=seen_play_ids,
+            raw_plays=raw,
+            debug=debug,
+            snap_review_audit=snap_review_audit,
+        )
     existing = espn_play_ids_from_plays(drive_log.results)
     n_ops = 0
     for play in fd.plays:

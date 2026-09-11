@@ -596,9 +596,8 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 horizontal=True,
                 key=LIVE_FEED_TEAM_SCOPE,
                 help=(
-                    "Which ESPN possessions enter **Game.drives** and the **live drive log** on sync. "
-                    "**Our team only** (default) keeps a single sideline. **Unknown** feed team ids are skipped "
-                    "unless you choose **Both teams**."
+                    "Which ESPN **in-progress** possession merges into the live drive log. "
+                    "**Unknown** feed team ids are skipped unless you choose **Both teams**."
                 ),
             )
             st.button(
