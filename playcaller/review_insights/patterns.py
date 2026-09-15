@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List, Optional, Sequence, Set, Tuple
 
 from playcaller.game import DRIVE_END_PUNT, Drive, Game
+from playcaller.game_context_features import drive_trusted_for_tendencies
 from playcaller.review.unified_review import UnifiedReviewRow
 from playcaller.review_insights.models import Pattern
 from playcaller.review_insights.situational import (
@@ -469,6 +470,8 @@ def _three_and_out_rate_backed_up(
         except (TypeError, ValueError):
             continue
         if yl > BACKED_UP_MAX_OWN_YARDLINE:
+            continue
+        if not drive_trusted_for_tendencies(dr):
             continue
         eligible += 1
         res = dr.result
