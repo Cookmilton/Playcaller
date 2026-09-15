@@ -153,12 +153,13 @@ def test_end_kind_override_beats_default_unknown() -> None:
     assert r.headline == "Field goal"
 
 
-def test_complete_drive_net_yards_includes_penalty() -> None:
+def test_complete_drive_net_yards_uses_yards_gained_only() -> None:
+    # penalty_yards must not be added again — net is yards_gained alone.
     plays = [
         ActualPlayResult(yards_gained=10, family="quick_game", penalty=True, penalty_yards=-5),
     ]
     d = complete_drive_from_plays(plays)
-    assert d.total_yards == 5
+    assert d.total_yards == 10
     assert d.play_count == 1
 
 
