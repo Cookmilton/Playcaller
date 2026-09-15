@@ -426,8 +426,22 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
                     flags.append(
                         f"⚠️ Archived play count={dr.play_count} vs ESPN offensivePlays={audit.feed_offensive_plays}"
                     )
+            if audit.feed_yards is not None:
+                computed = (
+                    int(dr.computed_yards)
+                    if dr.computed_yards is not None
+                    else int(dr.total_yards)
+                )
+                espn_y = int(audit.feed_yards)
+                delta = abs(computed - espn_y)
+                if delta > 2:
+                    flags.append(
+                        f"⚠️ Computed yards={computed} vs ESPN yards={espn_y} (Δ={computed - espn_y})"
+                    )
             if audit.feed_yards is not None and abs(int(dr.total_yards) - int(audit.feed_yards)) > 15:
-                flags.append(f"⚠️ Sum yards in plays={dr.total_yards} vs ESPN yards={audit.feed_yards}")
+                # total_yards should match ESPN when yards_source=espn; keep as sanity tripwire
+                if str(getattr(dr, "yards_source", "") or "") != "espn":
+                    flags.append(f"⚠️ Sum yards in plays={dr.total_yards} vs ESPN yards={audit.feed_yards}")
 
             if audit.start_period is None or audit.start_period == 0:
                 if rec.start_quarter <= 0:

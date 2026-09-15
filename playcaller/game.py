@@ -25,9 +25,12 @@ DRIVE_END_PUNT = "punt"
 DRIVE_END_TURNOVER_INT = "turnover_interception"
 DRIVE_END_TURNOVER_FUMBLE = "turnover_fumble"
 DRIVE_END_TURNOVER_ON_DOWNS = "turnover_on_downs"
+DRIVE_END_END_OF_HALF = "end_of_half"
+DRIVE_END_END_OF_GAME = "end_of_game"
 DRIVE_END_UNKNOWN = "unknown"
 
 # Drive endings that change who has the ball (simplified: always flip offense ↔ defense).
+# Terminal period markers are known non-scoring ends — no flip.
 DRIVE_END_CHANGE_OF_POSSESSION_KINDS = frozenset(
     {
         DRIVE_END_TOUCHDOWN,
@@ -50,6 +53,8 @@ DRIVE_END_OVERRIDE_KINDS = frozenset(
         DRIVE_END_TURNOVER_INT,
         DRIVE_END_TURNOVER_FUMBLE,
         DRIVE_END_TURNOVER_ON_DOWNS,
+        DRIVE_END_END_OF_HALF,
+        DRIVE_END_END_OF_GAME,
         DRIVE_END_UNKNOWN,
     }
 )
@@ -65,6 +70,8 @@ DRIVE_END_UI_OPTIONS = (
     DRIVE_END_TURNOVER_INT,
     DRIVE_END_TURNOVER_FUMBLE,
     DRIVE_END_TURNOVER_ON_DOWNS,
+    DRIVE_END_END_OF_HALF,
+    DRIVE_END_END_OF_GAME,
     DRIVE_END_UNKNOWN,
 )
 DRIVE_END_UI_LABELS = {
@@ -76,6 +83,8 @@ DRIVE_END_UI_LABELS = {
     DRIVE_END_TURNOVER_INT: "Interception",
     DRIVE_END_TURNOVER_FUMBLE: "Fumble",
     DRIVE_END_TURNOVER_ON_DOWNS: "Turnover on downs",
+    DRIVE_END_END_OF_HALF: "End of half",
+    DRIVE_END_END_OF_GAME: "End of game",
     DRIVE_END_UNKNOWN: "Other / unclear",
 }
 
@@ -89,6 +98,8 @@ _DRIVE_END_HEADLINE: Dict[str, str] = {
     DRIVE_END_TURNOVER_INT: "Interception",
     DRIVE_END_TURNOVER_FUMBLE: "Fumble",
     DRIVE_END_TURNOVER_ON_DOWNS: "Turnover on downs",
+    DRIVE_END_END_OF_HALF: "End of half",
+    DRIVE_END_END_OF_GAME: "End of game",
     DRIVE_END_UNKNOWN: "Drive ended",
 }
 
@@ -140,6 +151,11 @@ OUTCOME_SOURCE_INFERRED = "inferred"
 OUTCOME_SOURCE_UNKNOWN = "unknown"
 OutcomeSource = Literal["espn", "inferred", "unknown"]
 
+# Where ``Drive.total_yards`` came from.
+YARDS_SOURCE_ESPN = "espn"
+YARDS_SOURCE_COMPUTED = "computed"
+YardsSource = Literal["espn", "computed"]
+
 
 @dataclass
 class Drive:
@@ -162,6 +178,9 @@ class Drive:
     session_drive_epoch: Optional[int] = None
     # Provenance for ``result``: ESPN feed, play inference, or unresolved.
     outcome_source: Optional[str] = None
+    # Play-sum yards (always computed); ``total_yards`` prefers ESPN ``yards`` when present.
+    computed_yards: Optional[int] = None
+    yards_source: Optional[str] = None
 
     def with_computed_stats(
         self,
@@ -171,7 +190,7 @@ class Drive:
     ) -> "Drive":
         from playcaller.play_event_segment import counts_as_offensive_snap, counts_toward_offensive_yards
 
-        net = sum(
+        computed = sum(
             int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0)
             for p in self.plays
             if counts_toward_offensive_yards(p)
@@ -179,9 +198,23 @@ class Drive:
         n = sum(1 for p in self.plays if counts_as_offensive_snap(p))
         elapsed = max(0, int(seconds_per_play) * n)
         r = result if result is not None else self.result
+        espn_yards = None
+        if self.feed_audit is not None and self.feed_audit.feed_yards is not None:
+            try:
+                espn_yards = int(self.feed_audit.feed_yards)
+            except (TypeError, ValueError):
+                espn_yards = None
+        if espn_yards is not None:
+            total = espn_yards
+            ysrc = YARDS_SOURCE_ESPN
+        else:
+            total = computed
+            ysrc = YARDS_SOURCE_COMPUTED
         return replace(
             self,
-            total_yards=net,
+            total_yards=total,
+            computed_yards=int(computed),
+            yards_source=ysrc,
             play_count=n,
             time_elapsed_seconds=elapsed,
             result=r,
@@ -505,8 +538,26 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         feed_audit=_drive_feed_audit_from_dict(d.get("feed_audit")),
         session_drive_epoch=_json_opt_session_epoch(d.get("session_drive_epoch")),
         outcome_source=_json_opt_outcome_source(d.get("outcome_source")),
+        computed_yards=_json_opt_int(d.get("computed_yards")),
+        yards_source=_json_opt_yards_source(d.get("yards_source")),
     )
     return out
+
+
+def _json_opt_int(raw: Any) -> Optional[int]:
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_opt_yards_source(raw: Any) -> Optional[str]:
+    s = str(raw or "").strip().lower()
+    if s in (YARDS_SOURCE_ESPN, YARDS_SOURCE_COMPUTED):
+        return s
+    return None
 
 
 def _json_opt_outcome_source(raw: Any) -> Optional[str]:
@@ -573,6 +624,10 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             row["session_drive_epoch"] = int(dr.session_drive_epoch)
         if dr.outcome_source:
             row["outcome_source"] = str(dr.outcome_source)
+        if dr.computed_yards is not None:
+            row["computed_yards"] = int(dr.computed_yards)
+        if dr.yards_source:
+            row["yards_source"] = str(dr.yards_source)
         payload["drives"].append(row)
     return payload
 
@@ -650,10 +705,14 @@ __all__ = [
     "DRIVE_END_TURNOVER_FUMBLE",
     "DRIVE_END_TURNOVER_INT",
     "DRIVE_END_TURNOVER_ON_DOWNS",
+    "DRIVE_END_END_OF_HALF",
+    "DRIVE_END_END_OF_GAME",
     "DRIVE_END_UNKNOWN",
     "OUTCOME_SOURCE_ESPN",
     "OUTCOME_SOURCE_INFERRED",
     "OUTCOME_SOURCE_UNKNOWN",
+    "YARDS_SOURCE_COMPUTED",
+    "YARDS_SOURCE_ESPN",
     "Drive",
     "DriveFeedAuditSnapshot",
     "DriveResult",
