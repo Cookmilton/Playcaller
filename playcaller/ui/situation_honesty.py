@@ -401,5 +401,5 @@ def honest_summary_line(
         npart = honesty.distance.text if honesty.distance.synced else NOT_SYNCED_TEXT
         dd = f"{dpart} & {npart}" if honesty.down.synced else f"{NOT_SYNCED_TEXT} & {npart}"
     return (
-        f"{clock_phrase} · Ball on {ball} · {int(our_score)}–{int(their_score)} · {dd}"
+        f"{clock} · Ball on {ball} · {int(our_score)}–{int(their_score)} · {dd}"
     )
