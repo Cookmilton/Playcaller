@@ -56,13 +56,31 @@ def occupied_espn_play_ids(game: Game, drive_log: DriveLogger) -> Set[str]:
 def drive_log_holds_previous_feed_drive(
     drive_log: DriveLogger,
     current_raw_plays: Optional[Sequence[Mapping[str, object]]],
+    *,
+    current_feed_drive_id: Optional[str] = None,
+    last_feed_drive_id: Optional[str] = None,
 ) -> bool:
-    """True when the logger has ESPN ids that are not on the current feed drive."""
+    """
+    True when the live logger still belongs to a prior feed drive.
+
+    Fires whenever the logger is non-empty and ``drives.current.id`` has changed
+    since the last sync — including manual-only rows with no ESPN play ids.
+    Falls back to the ESPN play-id subset check when drive ids are unavailable.
+    """
+    if not drive_log.results:
+        return False
+    cur = str(current_feed_drive_id or "").strip()
+    last = str(last_feed_drive_id or "").strip()
+    if cur and last and cur != last:
+        return True
     open_ids = espn_play_ids_from_plays(drive_log.results)
     if not open_ids:
         return False
     current_ids = espn_play_ids_from_raw_feed_plays(current_raw_plays)
     return not open_ids <= current_ids
+
+
+PARTIAL_COMPLETED_DRIVE_SKIP_PREFIX = "partial completed feed drive skipped"
 
 
 def completed_drive_overlaps_occupied(fd: FeedCompletedDrive, occupied: Set[str]) -> bool:

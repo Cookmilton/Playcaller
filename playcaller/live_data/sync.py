@@ -298,13 +298,15 @@ def apply_snapshot(
 
     feed_scope = normalize_feed_team_scope(str(session.get(LIVE_FEED_TEAM_SCOPE) or ""))
 
+    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
     leftover_open = drive_log_holds_previous_feed_drive(
-        drive_log, snapshot.current_feed_drive_plays
+        drive_log,
+        snapshot.current_feed_drive_plays,
+        current_feed_drive_id=snapshot.current_feed_drive_id,
+        last_feed_drive_id=str(last_drive_id) if last_drive_id else None,
     )
     if leftover_open:
         skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
-
-    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
     seen: Set[str] = prepare_seen_play_ids_for_feed(
         session,
         current_feed_drive_id=snapshot.current_feed_drive_id,
