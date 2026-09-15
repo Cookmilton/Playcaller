@@ -126,9 +126,14 @@ def possessing_team_from_feed_plays(
     Returns ``(possessing_team, refuse_reason)``. When no play carries a feed team id,
     falls back to ``fallback_possession`` (typically ``game.possession``). Mixed feed
     team ids refuse archival (contaminated logger).
+
+    Kickoff rows are ignored: ESPN ``start.team`` is the kicking team, which would
+    otherwise look like opponent contamination on a coached drive that opens with a return.
     """
     ids: set[str] = set()
     for play in plays or ():
+        if str(getattr(play, "result_type", "") or "").strip().lower() == "kickoff":
+            continue
         tid = str(getattr(play, "feed_possession_team_id", None) or "").strip()
         if tid:
             ids.add(tid)

@@ -256,6 +256,30 @@ def test_end_drive_possessing_team_from_feed_plays() -> None:
     assert refuse3 is None
     assert side3 == "offense"
 
+    # Kickoff start.team is the kicker — must not refuse a coached drive that opens with a return.
+    plays_ko = [
+        ActualPlayResult(
+            play_type="special",
+            result_type="kickoff",
+            yards_gained=25,
+            description="ko",
+            feed_possession_team_id=SF,
+        ),
+        ActualPlayResult(
+            family="inside_zone",
+            play_type="run",
+            result_type="run",
+            yards_gained=9,
+            description="run",
+            feed_possession_team_id=LAR,
+        ),
+    ]
+    side4, refuse4 = possessing_team_from_feed_plays(
+        plays_ko, coached_team_id=LAR, fallback_possession="defense"
+    )
+    assert refuse4 is None
+    assert side4 == "offense"
+
 
 def test_honest_summary_line_never_contains_none_string() -> None:
     honesty = build_situation_honesty(
