@@ -82,21 +82,39 @@ def counts_as_offensive_snap(act: Optional[ActualPlayResult]) -> bool:
 
 def counts_toward_offensive_yards(act: Optional[ActualPlayResult]) -> bool:
     """
-    Whether ``yards_gained`` on this row should enter drive ``total_yards``.
+    Whether ``yards_gained`` on this row enters drive ``computed_yards``.
 
-    Excludes kickoff return yards, field-goal / PAT kick distance, and pure admin
-    rows. Penalty yardage still counts (field-position change on the possession).
+    Matches ESPN completed-drive ``yards``: sum of possessing-offense play nets,
+    excluding kickoff/punt/FG/PAT rows and interception-return yardage. Penalty rows
+    that changed field position still count (net already in ``yards_gained``).
+
+    Fumble rows keep the offensive net (loss/gain before COP). Interception return
+    yards belong to the defense — excluded. Return plays stay on the drive for
+    outcome/boundary truth; only yard attribution differs.
     """
     if act is None:
         return False
-    if bool(getattr(act, "penalty", False)):
-        return True
+    rt = (act.result_type or "").strip().lower()
+    # INT return yards are the defense's; never the possessing offense's.
+    if rt == "interception":
+        return False
     seg = segment_from_actual(act)
     if seg in (
         PlayEventSegment.KICKOFF,
+        PlayEventSegment.PUNT,
         PlayEventSegment.FIELD_GOAL,
         PlayEventSegment.PAT,
         PlayEventSegment.ADMIN,
     ):
+        # Pure admin (timeouts) out; penalty/no_play still ADMIN — those count via penalty flag.
+        if bool(getattr(act, "penalty", False)):
+            return True
         return False
     return True
+
+
+def play_net_yards_for_drive(act: Optional[ActualPlayResult]) -> int:
+    """Single net for drive sums: ``yards_gained`` only (never + ``penalty_yards``)."""
+    if act is None or not counts_toward_offensive_yards(act):
+        return 0
+    return int(act.yards_gained)
