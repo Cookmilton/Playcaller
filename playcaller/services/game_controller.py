@@ -34,9 +34,11 @@ from playcaller.history.repository_corpus import load_repository_plays
 from playcaller.history.repository_paths import resolve_history_repository_root
 from playcaller.history.repository_settings import load_history_repository_settings
 from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN, sort_game_drives_by_feed_sequence
+from playcaller.possession import possessing_team_from_feed_plays
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     HV_CORPUS_SOURCE,
+    LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_MANUAL_EVENT_FOR_ID,
     HV_REPO_SELECTED_GAME_IDS,
     HV_REPO_USE_ALL_GAMES,
@@ -94,7 +96,15 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
                 else {"end_kind_override": end_mode}
             )
         g = st.session_state.game
-        possessing = g.possession
+        coached_id = str(st.session_state.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) or "").strip()
+        possessing, refuse = possessing_team_from_feed_plays(
+            list(dl.results),
+            coached_team_id=coached_id,
+            fallback_possession=g.possession,
+        )
+        if refuse:
+            st.warning(refuse)
+            return
         finished = complete_drive_from_plays(
             list(dl.results),
             last_snap_touchdown=bool(snap_ctx.get("touchdown")),

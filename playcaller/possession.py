@@ -107,3 +107,37 @@ def flipped_possession(possession: Optional[str]) -> Optional[str]:
     if possession == POSSESSION_DEFENSE:
         return POSSESSION_OFFENSE
     return None
+
+
+END_DRIVE_MIXED_FEED_TEAMS_REASON = (
+    "End drive refused: logger plays carry mixed feed team ids — archive after cleaning the log."
+)
+
+
+def possessing_team_from_feed_plays(
+    plays: Any,
+    *,
+    coached_team_id: str,
+    fallback_possession: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Map play-level ``feed_possession_team_id`` through ``coached_team_id`` → offense/defense.
+
+    Returns ``(possessing_team, refuse_reason)``. When no play carries a feed team id,
+    falls back to ``fallback_possession`` (typically ``game.possession``). Mixed feed
+    team ids refuse archival (contaminated logger).
+    """
+    ids: set[str] = set()
+    for play in plays or ():
+        tid = str(getattr(play, "feed_possession_team_id", None) or "").strip()
+        if tid:
+            ids.add(tid)
+    if not ids:
+        return fallback_possession, None
+    if len(ids) > 1:
+        return None, END_DRIVE_MIXED_FEED_TEAMS_REASON
+    tid = next(iter(ids))
+    cid = str(coached_team_id or "").strip()
+    if not cid:
+        return fallback_possession, None
+    return (POSSESSION_OFFENSE if tid == cid else POSSESSION_DEFENSE), None
