@@ -169,8 +169,14 @@ class Drive:
         seconds_per_play: int = 38,
         result: Optional[DriveResult] = None,
     ) -> "Drive":
-        net = sum(int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0) for p in self.plays)
-        n = len(self.plays)
+        from playcaller.play_event_segment import counts_as_offensive_snap, counts_toward_offensive_yards
+
+        net = sum(
+            int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0)
+            for p in self.plays
+            if counts_toward_offensive_yards(p)
+        )
+        n = sum(1 for p in self.plays if counts_as_offensive_snap(p))
         elapsed = max(0, int(seconds_per_play) * n)
         r = result if result is not None else self.result
         return replace(
@@ -245,10 +251,17 @@ def _drive_detail_line(
     *,
     seconds_per_play: int = 38,
 ) -> str:
+    from playcaller.play_event_segment import counts_as_offensive_snap, counts_toward_offensive_yards
+
     if not plays:
         return "0 plays, 0 yards, 0:00"
-    n = len(plays)
-    net = sum(int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0) for p in plays)
+    snap_plays = [p for p in plays if counts_as_offensive_snap(p)]
+    n = len(snap_plays)
+    net = sum(
+        int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0)
+        for p in plays
+        if counts_toward_offensive_yards(p)
+    )
     elapsed_sec = max(0, int(seconds_per_play) * n)
     return f"{n} play{'s' if n != 1 else ''}, {net} yards, {_fmt_drive_clock(elapsed_sec)}"
 

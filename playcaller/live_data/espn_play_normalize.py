@@ -90,11 +90,23 @@ _ADMIN_SUBSTRINGS = (
     "tv timeout",
     "timeout #",
     "official's timeout",
+    "official timeout",  # ESPN Site API wording (no apostrophe)
     "challenged",
     "challenge",
     "measurement",
     "review",
     "injury timeout",
+)
+
+_ADMIN_TYPE_TEXTS = frozenset(
+    {
+        "official timeout",
+        "end of half",
+        "end of game",
+        "end period",
+        "end of quarter",
+        "end of regulation",
+    }
 )
 
 def _play_text(play: Dict[str, Any]) -> str:
@@ -148,7 +160,10 @@ def should_skip_espn_play(play: Dict[str, Any]) -> bool:
     t = _play_text(play).strip().lower()
     if not t:
         return True
-    return any(s in t for s in _ADMIN_SUBSTRINGS)
+    if any(s in t for s in _ADMIN_SUBSTRINGS):
+        return True
+    ptype = _type_text(play).strip().lower()
+    return ptype in _ADMIN_TYPE_TEXTS
 
 
 def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult]:

@@ -31,6 +31,8 @@ def segment_from_actual(act: Optional[ActualPlayResult]) -> PlayEventSegment:
     rt = (act.result_type or "").strip().lower()
     pt = (act.play_type or "").strip().lower()
     fam = (act.family or "").strip().lower()
+    desc = (act.description or "").lower()
+    concept = (act.concept_name or "").lower()
 
     if rt == "kickoff":
         return PlayEventSegment.KICKOFF
@@ -40,6 +42,18 @@ def segment_from_actual(act: Optional[ActualPlayResult]) -> PlayEventSegment:
         return PlayEventSegment.FIELD_GOAL
     if rt in ("extra_point", "extra_point_miss"):
         return PlayEventSegment.PAT
+    # Clock / timeout / period markers (even if they slipped past ingest skip).
+    if (
+        "official timeout" in desc
+        or "official timeout" in concept
+        or "timeout #" in desc
+        or concept in ("official timeout", "end of half", "end of quarter", "end of game")
+        or "end of half" in desc
+        or "end of quarter" in desc
+        or "end of game" in desc
+        or "two-minute warning" in desc
+    ):
+        return PlayEventSegment.ADMIN
     if pt == "admin" or rt in ("no_play",):
         return PlayEventSegment.ADMIN
     if fam == "two_point" or rt == "two_point":
@@ -51,3 +65,38 @@ def segment_from_actual(act: Optional[ActualPlayResult]) -> PlayEventSegment:
 
 def is_offensive_scrm_play(act: Optional[ActualPlayResult]) -> bool:
     return segment_from_actual(act) == PlayEventSegment.OFFENSE
+
+
+def counts_as_offensive_snap(act: Optional[ActualPlayResult]) -> bool:
+    """
+    Whether the row counts toward drive ``play_count`` / snap-oriented stats.
+
+    Administrative clock rows are excluded; kickoffs and kicks still count as rows
+    on the drive chart (they are not offensive tendency snaps — use
+    :func:`is_offensive_scrm_play` for that).
+    """
+    if act is None:
+        return False
+    return segment_from_actual(act) != PlayEventSegment.ADMIN
+
+
+def counts_toward_offensive_yards(act: Optional[ActualPlayResult]) -> bool:
+    """
+    Whether ``yards_gained`` on this row should enter drive ``total_yards``.
+
+    Excludes kickoff return yards, field-goal / PAT kick distance, and pure admin
+    rows. Penalty yardage still counts (field-position change on the possession).
+    """
+    if act is None:
+        return False
+    if bool(getattr(act, "penalty", False)):
+        return True
+    seg = segment_from_actual(act)
+    if seg in (
+        PlayEventSegment.KICKOFF,
+        PlayEventSegment.FIELD_GOAL,
+        PlayEventSegment.PAT,
+        PlayEventSegment.ADMIN,
+    ):
+        return False
+    return True
