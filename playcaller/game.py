@@ -181,6 +181,8 @@ class Drive:
     # Play-sum yards (always computed); ``total_yards`` prefers ESPN ``yards`` when present.
     computed_yards: Optional[int] = None
     yards_source: Optional[str] = None
+    # Shadow play-inferred kind (audit cross-check); never the exported primary outcome.
+    inferred_kind: Optional[str] = None
 
     def with_computed_stats(
         self,
@@ -188,13 +190,9 @@ class Drive:
         seconds_per_play: int = 38,
         result: Optional[DriveResult] = None,
     ) -> "Drive":
-        from playcaller.play_event_segment import counts_as_offensive_snap, counts_toward_offensive_yards
+        from playcaller.play_event_segment import counts_as_offensive_snap, play_net_yards_for_drive
 
-        computed = sum(
-            int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0)
-            for p in self.plays
-            if counts_toward_offensive_yards(p)
-        )
+        computed = sum(play_net_yards_for_drive(p) for p in self.plays)
         n = sum(1 for p in self.plays if counts_as_offensive_snap(p))
         elapsed = max(0, int(seconds_per_play) * n)
         r = result if result is not None else self.result
@@ -284,17 +282,13 @@ def _drive_detail_line(
     *,
     seconds_per_play: int = 38,
 ) -> str:
-    from playcaller.play_event_segment import counts_as_offensive_snap, counts_toward_offensive_yards
+    from playcaller.play_event_segment import counts_as_offensive_snap, play_net_yards_for_drive
 
     if not plays:
         return "0 plays, 0 yards, 0:00"
     snap_plays = [p for p in plays if counts_as_offensive_snap(p)]
     n = len(snap_plays)
-    net = sum(
-        int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0)
-        for p in plays
-        if counts_toward_offensive_yards(p)
-    )
+    net = sum(play_net_yards_for_drive(p) for p in plays)
     elapsed_sec = max(0, int(seconds_per_play) * n)
     return f"{n} play{'s' if n != 1 else ''}, {net} yards, {_fmt_drive_clock(elapsed_sec)}"
 
@@ -441,7 +435,8 @@ def complete_drive_from_plays(
 
     When ``feed_audit`` carries an ESPN drive result, that outcome wins (completed-drive
     import). Explicit ``end_kind_override`` still wins over ESPN. Play inference is the
-    fallback when ESPN is absent or unmapped.
+    fallback when ESPN is absent or unmapped. ``inferred_kind`` always stores the
+    play-inferred shadow for audit (never the exported primary when ESPN wins).
     """
     base = Drive(
         plays=list(plays),
@@ -450,6 +445,13 @@ def complete_drive_from_plays(
         feed_team_abbr=str(feed_team_abbr or ""),
         feed_team_display_name=str(feed_team_display_name or ""),
         feed_audit=feed_audit,
+    )
+    play_inferred = classify_drive_end(
+        base.plays,
+        last_snap_touchdown=last_snap_touchdown,
+        last_snap_turnover_on_downs=last_snap_turnover_on_downs,
+        seconds_per_play=seconds_per_play,
+        end_kind_override=None,
     )
     override = (end_kind_override or "").strip()
     if override in DRIVE_END_OVERRIDE_KINDS:
@@ -463,6 +465,7 @@ def complete_drive_from_plays(
         outcome_source = (
             OUTCOME_SOURCE_UNKNOWN if res.kind == DRIVE_END_UNKNOWN else OUTCOME_SOURCE_INFERRED
         )
+        shadow_kind = play_inferred.kind
     else:
         from playcaller.espn_drive_outcome import drive_result_kind_from_espn_audit
 
@@ -470,19 +473,15 @@ def complete_drive_from_plays(
         if espn_kind is not None:
             res = drive_result_for_kind(espn_kind, base.plays, seconds_per_play=seconds_per_play)
             outcome_source = OUTCOME_SOURCE_ESPN
+            shadow_kind = play_inferred.kind
         else:
-            res = classify_drive_end(
-                base.plays,
-                last_snap_touchdown=last_snap_touchdown,
-                last_snap_turnover_on_downs=last_snap_turnover_on_downs,
-                seconds_per_play=seconds_per_play,
-                end_kind_override=None,
-            )
+            res = play_inferred
             outcome_source = (
                 OUTCOME_SOURCE_UNKNOWN if res.kind == DRIVE_END_UNKNOWN else OUTCOME_SOURCE_INFERRED
             )
+            shadow_kind = play_inferred.kind
     finished = base.with_computed_stats(seconds_per_play=seconds_per_play, result=res)
-    return replace(finished, outcome_source=outcome_source)
+    return replace(finished, outcome_source=outcome_source, inferred_kind=str(shadow_kind))
 
 
 def clock_seconds_after_drive_elapsed(current_clock_seconds: int, drive: Drive) -> int:
@@ -540,8 +539,14 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         outcome_source=_json_opt_outcome_source(d.get("outcome_source")),
         computed_yards=_json_opt_int(d.get("computed_yards")),
         yards_source=_json_opt_yards_source(d.get("yards_source")),
+        inferred_kind=_json_opt_inferred_kind(d.get("inferred_kind")),
     )
     return out
+
+
+def _json_opt_inferred_kind(raw: Any) -> Optional[str]:
+    s = str(raw or "").strip()
+    return s or None
 
 
 def _json_opt_int(raw: Any) -> Optional[int]:
@@ -628,6 +633,8 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             row["computed_yards"] = int(dr.computed_yards)
         if dr.yards_source:
             row["yards_source"] = str(dr.yards_source)
+        if dr.inferred_kind:
+            row["inferred_kind"] = str(dr.inferred_kind)
         payload["drives"].append(row)
     return payload
 

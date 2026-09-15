@@ -87,9 +87,22 @@ def espn_outcome_bucket(audit: Optional[DriveFeedAuditSnapshot]) -> str:
 
 
 def inferred_outcome_bucket(dr: Drive) -> str:
-    from playcaller.game import DRIVE_END_END_OF_GAME, DRIVE_END_END_OF_HALF
+    """
+    Coarse bucket from **shadow play inference**, not the stored ESPN-sourced ``result.kind``.
 
-    k = dr.result.kind if dr.result else DRIVE_END_UNKNOWN
+    Prefer ``Drive.inferred_kind`` (set at archive time). If absent (legacy JSON), re-run
+    ``classify_drive_end`` on plays so the audit cross-check stays meaningful.
+    """
+    from playcaller.game import (
+        DRIVE_END_END_OF_GAME,
+        DRIVE_END_END_OF_HALF,
+        classify_drive_end,
+    )
+
+    k = (dr.inferred_kind or "").strip()
+    if not k:
+        shadow = classify_drive_end(list(dr.plays or []))
+        k = shadow.kind
     if k == DRIVE_END_TOUCHDOWN:
         return "TD"
     if k == DRIVE_END_FIELD_GOAL:
@@ -330,10 +343,12 @@ def _build_espn_raw(audit: Optional[DriveFeedAuditSnapshot]) -> EspnDriveRaw:
 
 
 def _build_inferred_snapshot(dr: Drive, *, seconds_per_play: int = 38) -> InferredDriveSnapshot:
+    from playcaller.play_event_segment import play_net_yards_for_drive
+
     plays = list(dr.plays)
     res = dr.result or DriveResult(kind=DRIVE_END_UNKNOWN, headline="Drive ended", detail_line="0 plays, 0 yards, 0:00")
     detail = res.detail_line if res.detail_line else _drive_detail_line(plays, seconds_per_play=seconds_per_play)
-    net = sum(int(p.yards_gained) + (int(p.penalty_yards) if p.penalty else 0) for p in plays)
+    net = sum(play_net_yards_for_drive(p) for p in plays)
     n = len(plays)
     elapsed = max(0, int(seconds_per_play) * n)
     return InferredDriveSnapshot(
