@@ -55,6 +55,10 @@ def test_audit_status_kind_and_header_tag() -> None:
         start_clock_display="12:00",
         start_field_text="NYG 25",
     )
+    from dataclasses import replace
+
+    from playcaller.game import classify_drive_end
+
     d = complete_drive_from_plays(
         [
             ActualPlayResult(
@@ -67,6 +71,8 @@ def test_audit_status_kind_and_header_tag() -> None:
         possessing_team="offense",
         feed_audit=audit,
     )
+    # Simulate play-inferred TD retained for audit diagnostics while ESPN said Punt.
+    d = replace(d, result=classify_drive_end(d.plays), outcome_source="inferred")
     g.drives = [d]
     g.offense_points = 7
     g.defense_points = 0
@@ -88,11 +94,16 @@ def test_actionable_lines_for_outcome_mismatch() -> None:
         start_clock_display="8:00",
         start_field_text="OPP 30",
     )
+    from dataclasses import replace
+
+    from playcaller.game import classify_drive_end
+
     d = complete_drive_from_plays(
         [ActualPlayResult(yards_gained=3, family="inside_run", play_type="run", touchdown=False)],
         possessing_team="offense",
         feed_audit=audit,
     )
+    d = replace(d, result=classify_drive_end(d.plays), outcome_source="inferred")
     g.drives = [d]
     g.offense_points = 3
     g.defense_points = 0

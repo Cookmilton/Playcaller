@@ -32,7 +32,7 @@ _EXPECTED_GB = (
     ("touchdown", 7),
     ("touchdown", 7),
     ("punt", 0),
-    ("punt", 0),
+    ("unknown", 0),  # END OF GAME — honest unknown, not invented punt
 )
 
 # DET possessions (8 drives) when GB is coached team (DET on defense).
@@ -99,7 +99,10 @@ def test_packers_lions_golden_reconcile_and_audit() -> None:
     d0 = g.drives[0]
     r0 = reconcile_drive(d0, espn=d0.feed_audit)
     assert d0.feed_team_espn_id == GB_ID
-    assert r0.espn_coarse_bucket == "FG" and r0.raw_espn_vs_inferred_disagree
+    assert r0.espn_coarse_bucket == "FG"
+    # Stored outcome is ESPN (J1.1); play-vs-ESPN diagnostic disagreement is no longer expected here.
+    assert d0.result is not None and d0.result.kind == "field_goal"
+    assert d0.outcome_source == "espn"
 
     rep = compute_drive_audit(g)
     assert rep.implied_final_us == 31

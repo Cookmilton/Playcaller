@@ -17,7 +17,11 @@ def test_build_gcf_synthetic_late_down_split() -> None:
         ActualPlayResult(family="inside_zone", play_type="run", yards_gained=3, first_down=False),
         ActualPlayResult(family="quick_game", play_type="pass", yards_gained=8, first_down=True),
     ]
-    d = complete_drive_from_plays(plays, possessing_team="offense")
+    d = complete_drive_from_plays(
+        plays,
+        possessing_team="offense",
+        end_kind_override="punt",
+    )
     g.drives.append(d)
     g.possession = "offense"
     log = DriveLogger()

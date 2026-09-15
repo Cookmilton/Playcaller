@@ -42,7 +42,11 @@ def test_reconcile_agreeing_espn_and_plays_no_warn() -> None:
 
 
 def test_reconcile_espn_overrides_inferred_disagree_info() -> None:
-    """ESPN says TD; plays might still classify differently in edge cases — ESPN wins."""
+    """ESPN says TD; stored play-inferred kind differs — ESPN wins, disagreement flagged."""
+    from dataclasses import replace
+
+    from playcaller.game import classify_drive_end
+
     audit = DriveFeedAuditSnapshot(
         espn_display_result="Touchdown",
         espn_result_code="TD",
@@ -54,6 +58,8 @@ def test_reconcile_espn_overrides_inferred_disagree_info() -> None:
         possessing_team="offense",
         feed_audit=audit,
     )
+    # Keep ESPN audit but restore play-inferred result for diagnostic disagreement.
+    dr = replace(dr, result=classify_drive_end(dr.plays), outcome_source="inferred")
     rec = reconcile_drive(dr, espn=audit)
     assert rec.possession_points == 7
     assert rec.raw_espn_vs_inferred_disagree
@@ -63,7 +69,14 @@ def test_reconcile_espn_overrides_inferred_disagree_info() -> None:
 def test_reconcile_espn_missing_uses_inferred() -> None:
     dr = complete_drive_from_plays(
         [
-            ActualPlayResult(yards_gained=0, family="punt", play_type="punt", touchdown=False),
+            ActualPlayResult(
+                yards_gained=0,
+                family="special_teams",
+                play_type="special",
+                result_type="punt",
+                description="Punt",
+                touchdown=False,
+            ),
         ],
         possessing_team="offense",
         feed_audit=None,
