@@ -74,11 +74,32 @@ def test_flip_possession_after_punt_drive() -> None:
     assert g.possession is None
     g.possession = "offense"
     d = complete_drive_from_plays(
+        [
+            ActualPlayResult(
+                yards_gained=3,
+                family="inside_zone",
+                play_type="run",
+                result_type="punt",
+                description="Punt",
+            )
+        ],
+        possessing_team="offense",
+    )
+    assert d.result is not None and d.result.kind == DRIVE_END_PUNT
+    flip_possession_after_drive(g, d)
+    assert g.possession == "defense"
+    flip_possession_after_drive(g, d)
+    assert g.possession == "offense"
+
+
+def test_flip_possession_skips_unknown_end() -> None:
+    g = Game.new_game()
+    g.possession = "offense"
+    d = complete_drive_from_plays(
         [ActualPlayResult(yards_gained=3, family="inside_zone", play_type="run")],
         possessing_team="offense",
     )
-    flip_possession_after_drive(g, d)
-    assert g.possession == "defense"
+    assert d.result is not None and d.result.kind == "unknown"
     flip_possession_after_drive(g, d)
     assert g.possession == "offense"
 
@@ -118,14 +139,14 @@ def test_missed_field_goal_no_points() -> None:
     assert g.defense_points == 0
 
 
-def test_classify_default_punt() -> None:
+def test_classify_default_unknown() -> None:
     plays = [ActualPlayResult(yards_gained=3, family="inside_zone", play_type="run")]
     r = classify_drive_end(plays)
-    assert r.kind == DRIVE_END_PUNT
-    assert r.headline == "Punt"
+    assert r.kind == "unknown"
+    assert r.headline == "Drive ended"
 
 
-def test_end_kind_override_beats_default_punt() -> None:
+def test_end_kind_override_beats_default_unknown() -> None:
     plays = [ActualPlayResult(yards_gained=3, family="inside_zone", play_type="run")]
     r = classify_drive_end(plays, end_kind_override=DRIVE_END_FIELD_GOAL)
     assert r.kind == DRIVE_END_FIELD_GOAL

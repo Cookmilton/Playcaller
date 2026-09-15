@@ -978,7 +978,7 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 key="ui_drive_end_on_new",
                 help=(
                     "**Auto** uses TDs, turnovers, turnover on downs (from last snap), and field goals when obvious; "
-                    "otherwise it labels the drive as a punt."
+                    "otherwise it leaves the outcome as unknown (honest)."
                 ),
             )
             _bind_ui("ui_drive_end_on_new")

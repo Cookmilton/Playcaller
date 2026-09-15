@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from .domain import PASS_FAMILIES, RUN_FAMILIES, ActualPlayResult
-from .game import DRIVE_END_TOUCHDOWN, DRIVE_END_FIELD_GOAL, Game
+from .game import DRIVE_END_TOUCHDOWN, DRIVE_END_FIELD_GOAL, DRIVE_END_UNKNOWN, Game
 from .state import DriveLogger
 
 _GCF_VERSION = 1
@@ -237,13 +237,21 @@ def build_game_context_features(
     n_team_drives = 0
     if game is not None:
         team = game.possession
-        team_drives = [dr for dr in game.drives if dr.possessing_team == team]
+        # Exclude unresolved ends from tendency denominators (do not treat as punts).
+        team_drives = [
+            dr
+            for dr in game.drives
+            if dr.possessing_team == team
+            and (dr.result is None or dr.result.kind != DRIVE_END_UNKNOWN)
+        ]
         n_team_drives = len(team_drives)
         if team_drives:
             res = team_drives[-1].result
             last_archived = str(res.kind) if res else ""
         for dr in team_drives:
             k = dr.result.kind if dr.result else "unknown"
+            if k == DRIVE_END_UNKNOWN:
+                continue
             drive_end_counts[k] = drive_end_counts.get(k, 0) + 1
             if k in (DRIVE_END_TOUCHDOWN, DRIVE_END_FIELD_GOAL):
                 scoring_ends += 1

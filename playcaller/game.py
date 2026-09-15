@@ -354,7 +354,8 @@ def classify_drive_end(
             detail_line=detail,
         )
 
-    return DriveResult(kind=DRIVE_END_PUNT, headline="Punt", detail_line=detail)
+    # Honest unresolved end — never invent a punt when the last play does not say so.
+    return DriveResult(kind=DRIVE_END_UNKNOWN, headline="Drive ended", detail_line=detail)
 
 
 def _norm_possessing_team(raw: Optional[str]) -> str:
