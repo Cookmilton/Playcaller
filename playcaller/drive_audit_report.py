@@ -433,10 +433,13 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
                     else int(dr.total_yards)
                 )
                 espn_y = int(audit.feed_yards)
-                delta = abs(computed - espn_y)
-                if delta > 2:
+                signed = computed - espn_y
+                delta = abs(signed)
+                if delta > 0:
+                    # Any non-zero drift is visible; |Δ|>2 stays the hard-fail threshold in tests.
+                    sym = "⚠️" if delta > 2 else "ℹ️"
                     flags.append(
-                        f"⚠️ Computed yards={computed} vs ESPN yards={espn_y} (Δ={computed - espn_y})"
+                        f"{sym} Computed yards={computed} vs ESPN yards={espn_y} (Δ={signed})"
                     )
             if audit.feed_yards is not None and abs(int(dr.total_yards) - int(audit.feed_yards)) > 15:
                 # total_yards should match ESPN when yards_source=espn; keep as sanity tripwire
