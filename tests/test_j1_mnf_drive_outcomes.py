@@ -35,7 +35,7 @@ def _imported_game() -> Game:
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     feeds = extract_completed_drives_from_espn_payload(payload, event_id=EVENT_ID)
     game = Game.new_game()
-    n, _ = merge_completed_espn_drives_into_game(
+    n, _, _ = merge_completed_espn_drives_into_game(
         game, {}, feeds, coached_team_id=DEN_ID, feed_team_scope="both"
     )
     assert n == 24

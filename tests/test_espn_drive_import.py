@@ -163,7 +163,7 @@ def test_merge_completed_ignores_feed_team_scope_for_storage() -> None:
     drives = extract_completed_drives_from_espn_payload(payload, event_id="401test001")
     game = Game.new_game()
     ss: dict = {}
-    n, _ = merge_completed_espn_drives_into_game(
+    n, _, _ = merge_completed_espn_drives_into_game(
         game, ss, drives, coached_team_id="14", feed_team_scope=PREVIOUS_DRIVES_FILTER_OPPONENT
     )
     assert n == 2
@@ -176,10 +176,10 @@ def test_merge_completed_drives_dedup_stable_keys() -> None:
     drives = extract_completed_drives_from_espn_payload(payload, event_id="401test001")
     game = Game.new_game()
     ss: dict = {}
-    n1, _batch1 = merge_completed_espn_drives_into_game(
+    n1, _batch1, _ = merge_completed_espn_drives_into_game(
         game, ss, drives, coached_team_id="14", feed_team_scope=PREVIOUS_DRIVES_FILTER_BOTH
     )
-    n2, _batch2 = merge_completed_espn_drives_into_game(
+    n2, _batch2, _ = merge_completed_espn_drives_into_game(
         game, ss, drives, coached_team_id="14", feed_team_scope=PREVIOUS_DRIVES_FILTER_BOTH
     )
     assert n1 == 2

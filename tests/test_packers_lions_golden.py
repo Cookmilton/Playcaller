@@ -79,7 +79,7 @@ def test_packers_lions_golden_reconcile_and_audit() -> None:
     g = Game.new_game()
     g.offense_points = 31
     g.defense_points = 24
-    n, _ = merge_completed_espn_drives_into_game(g, {}, fds, coached_team_id=GB_ID, feed_team_scope="both")
+    n, _, _ = merge_completed_espn_drives_into_game(g, {}, fds, coached_team_id=GB_ID, feed_team_scope="both")
     assert n == 17
     assert len(g.drives) == 17
 

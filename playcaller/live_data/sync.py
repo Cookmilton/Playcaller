@@ -307,6 +307,7 @@ def apply_snapshot(
     )
     if leftover_open:
         skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
+
     seen: Set[str] = prepare_seen_play_ids_for_feed(
         session,
         current_feed_drive_id=snapshot.current_feed_drive_id,
@@ -336,7 +337,7 @@ def apply_snapshot(
         and snapshot.completed_feed_drives
         and snapshot.coached_team_id
     ):
-        drives_imported, imported_batch = merge_completed_espn_drives_into_game(
+        drives_imported, imported_batch, partial_warns = merge_completed_espn_drives_into_game(
             game,
             session,
             snapshot.completed_feed_drives,
@@ -344,6 +345,8 @@ def apply_snapshot(
             feed_team_scope=feed_scope,
             occupied_play_ids=occupied_espn_play_ids(game, drive_log),
         )
+        for w in partial_warns:
+            skipped.append(w)
         if drives_imported:
             applied.append(f"imported_completed_drives:{drives_imported}")
             seen |= espn_play_ids_from_archived_drives(game)
