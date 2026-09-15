@@ -28,11 +28,11 @@ _EXPECTED_GB = (
     ("punt", 0),
     ("touchdown", 7),
     ("touchdown", 7),
-    ("unknown", 0),  # END_HALF — no score
+    ("end_of_half", 0),
     ("touchdown", 7),
     ("touchdown", 7),
     ("punt", 0),
-    ("unknown", 0),  # END OF GAME — honest unknown, not invented punt
+    ("end_of_game", 0),
 )
 
 # DET possessions (8 drives) when GB is coached team (DET on defense).

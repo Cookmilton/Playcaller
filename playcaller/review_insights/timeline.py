@@ -92,7 +92,11 @@ def _reconcile_all(game: Game) -> List[ReconciledDrive]:
 
 
 def _is_end_half(rec: ReconciledDrive) -> bool:
-    return (rec.espn_coarse_bucket or "").upper() == "END_HALF"
+    from playcaller.game import DRIVE_END_END_OF_GAME, DRIVE_END_END_OF_HALF
+
+    if rec.outcome_kind in (DRIVE_END_END_OF_HALF, DRIVE_END_END_OF_GAME):
+        return True
+    return (rec.espn_coarse_bucket or "").upper() in ("END_HALF", "END_GAME")
 
 
 def _is_scoring_drive(rec: ReconciledDrive) -> bool:

@@ -11,6 +11,8 @@ import logging
 from typing import Optional, Tuple
 
 from playcaller.game import (
+    DRIVE_END_END_OF_GAME,
+    DRIVE_END_END_OF_HALF,
     DRIVE_END_FIELD_GOAL,
     DRIVE_END_FIELD_GOAL_MISS,
     DRIVE_END_PUNT,
@@ -24,7 +26,7 @@ from playcaller.game import (
 
 logger = logging.getLogger(__name__)
 
-# Coarse ESPN buckets → stored kind. END_HALF / END_GAME / SAFETY stay unknown (honest).
+# Coarse ESPN buckets → stored kind. SAFETY stays unknown until we model it.
 _ESPN_BUCKET_TO_KIND = {
     "TD": DRIVE_END_TOUCHDOWN,
     "FG": DRIVE_END_FIELD_GOAL,
@@ -33,8 +35,8 @@ _ESPN_BUCKET_TO_KIND = {
     "INT": DRIVE_END_TURNOVER_INT,
     "FUMBLE": DRIVE_END_TURNOVER_FUMBLE,
     "DOWNS": DRIVE_END_TURNOVER_ON_DOWNS,
-    "END_HALF": DRIVE_END_UNKNOWN,
-    "END_GAME": DRIVE_END_UNKNOWN,
+    "END_HALF": DRIVE_END_END_OF_HALF,
+    "END_GAME": DRIVE_END_END_OF_GAME,
     "SAFETY": DRIVE_END_UNKNOWN,
 }
 

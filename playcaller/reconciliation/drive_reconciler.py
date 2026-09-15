@@ -44,6 +44,7 @@ _ESPN_AUTHORITATIVE_BUCKETS = frozenset(
         "DOWNS",
         "SAFETY",
         "END_HALF",
+        "END_GAME",
     }
 )
 
@@ -80,10 +81,14 @@ def espn_outcome_bucket(audit: Optional[DriveFeedAuditSnapshot]) -> str:
         return "SAFETY"
     if "END OF HALF" in s or "END HALF" in s:
         return "END_HALF"
+    if "END OF GAME" in s or "END GAME" in s:
+        return "END_GAME"
     return s[:24]
 
 
 def inferred_outcome_bucket(dr: Drive) -> str:
+    from playcaller.game import DRIVE_END_END_OF_GAME, DRIVE_END_END_OF_HALF
+
     k = dr.result.kind if dr.result else DRIVE_END_UNKNOWN
     if k == DRIVE_END_TOUCHDOWN:
         return "TD"
@@ -99,10 +104,16 @@ def inferred_outcome_bucket(dr: Drive) -> str:
         return "FUMBLE"
     if k == DRIVE_END_TURNOVER_ON_DOWNS:
         return "DOWNS"
+    if k == DRIVE_END_END_OF_HALF:
+        return "END_HALF"
+    if k == DRIVE_END_END_OF_GAME:
+        return "END_GAME"
     return "OTHER"
 
 
 def _espn_bucket_to_drive_kind(bucket: str) -> str:
+    from playcaller.game import DRIVE_END_END_OF_GAME, DRIVE_END_END_OF_HALF
+
     if bucket == "TD":
         return DRIVE_END_TOUCHDOWN
     if bucket == "FG":
@@ -117,6 +128,10 @@ def _espn_bucket_to_drive_kind(bucket: str) -> str:
         return DRIVE_END_TURNOVER_FUMBLE
     if bucket == "DOWNS":
         return DRIVE_END_TURNOVER_ON_DOWNS
+    if bucket == "END_HALF":
+        return DRIVE_END_END_OF_HALF
+    if bucket == "END_GAME":
+        return DRIVE_END_END_OF_GAME
     return DRIVE_END_UNKNOWN
 
 
@@ -149,6 +164,8 @@ def _headline_for_espn_bucket(
         return "Safety"
     if bucket == "END_HALF":
         return "End of half"
+    if bucket == "END_GAME":
+        return "End of game"
     res = drive_result_for_kind(fallback_kind, [])
     return res.headline
 

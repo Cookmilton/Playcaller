@@ -16,13 +16,15 @@ from playcaller.game import (
 
 
 def test_espn_bucket_td_and_end_half() -> None:
+    from playcaller.game import DRIVE_END_END_OF_HALF
+
     td = DriveFeedAuditSnapshot(espn_result_code="TD", espn_display_result="Touchdown")
     assert espn_drive_outcome_bucket(td) == "TD"
     assert drive_result_kind_from_espn_audit(td) == (DRIVE_END_TOUCHDOWN, "TD")
 
     half = DriveFeedAuditSnapshot(espn_result_code="END OF HALF", espn_display_result="End of Half")
     assert espn_drive_outcome_bucket(half) == "END_HALF"
-    assert drive_result_kind_from_espn_audit(half) == (DRIVE_END_UNKNOWN, "END_HALF")
+    assert drive_result_kind_from_espn_audit(half) == (DRIVE_END_END_OF_HALF, "END_HALF")
 
 
 def test_complete_drive_prefers_espn_audit_over_last_play() -> None:
