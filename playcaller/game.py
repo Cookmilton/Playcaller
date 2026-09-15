@@ -134,6 +134,13 @@ class DriveFeedAuditSnapshot:
     espn_td_extra_point: Optional[Literal["pat", "two_point", "pat_missed"]] = None
 
 
+# Where ``Drive.result.kind`` came from (export / audit provenance).
+OUTCOME_SOURCE_ESPN = "espn"
+OUTCOME_SOURCE_INFERRED = "inferred"
+OUTCOME_SOURCE_UNKNOWN = "unknown"
+OutcomeSource = Literal["espn", "inferred", "unknown"]
+
+
 @dataclass
 class Drive:
     plays: List[ActualPlayResult] = field(default_factory=list)
@@ -153,6 +160,8 @@ class Drive:
     feed_audit: Optional["DriveFeedAuditSnapshot"] = None
     # Session snap-review counter at **End drive** (stable across ``game.drives`` re-sort). None for ESPN import.
     session_drive_epoch: Optional[int] = None
+    # Provenance for ``result``: ESPN feed, play inference, or unresolved.
+    outcome_source: Optional[str] = None
 
     def with_computed_stats(
         self,
@@ -381,7 +390,12 @@ def complete_drive_from_plays(
     feed_team_display_name: str = "",
     feed_audit: Optional[DriveFeedAuditSnapshot] = None,
 ) -> Drive:
-    """Build a finished ``Drive`` with stats + ``DriveResult``."""
+    """Build a finished ``Drive`` with stats + ``DriveResult``.
+
+    When ``feed_audit`` carries an ESPN drive result, that outcome wins (completed-drive
+    import). Explicit ``end_kind_override`` still wins over ESPN. Play inference is the
+    fallback when ESPN is absent or unmapped.
+    """
     base = Drive(
         plays=list(plays),
         possessing_team=_norm_possessing_team(possessing_team),
@@ -390,14 +404,38 @@ def complete_drive_from_plays(
         feed_team_display_name=str(feed_team_display_name or ""),
         feed_audit=feed_audit,
     )
-    res = classify_drive_end(
-        base.plays,
-        last_snap_touchdown=last_snap_touchdown,
-        last_snap_turnover_on_downs=last_snap_turnover_on_downs,
-        seconds_per_play=seconds_per_play,
-        end_kind_override=end_kind_override,
-    )
-    return base.with_computed_stats(seconds_per_play=seconds_per_play, result=res)
+    override = (end_kind_override or "").strip()
+    if override in DRIVE_END_OVERRIDE_KINDS:
+        res = classify_drive_end(
+            base.plays,
+            last_snap_touchdown=last_snap_touchdown,
+            last_snap_turnover_on_downs=last_snap_turnover_on_downs,
+            seconds_per_play=seconds_per_play,
+            end_kind_override=override,
+        )
+        outcome_source = (
+            OUTCOME_SOURCE_UNKNOWN if res.kind == DRIVE_END_UNKNOWN else OUTCOME_SOURCE_INFERRED
+        )
+    else:
+        from playcaller.espn_drive_outcome import drive_result_kind_from_espn_audit
+
+        espn_kind, _bucket = drive_result_kind_from_espn_audit(feed_audit)
+        if espn_kind is not None:
+            res = drive_result_for_kind(espn_kind, base.plays, seconds_per_play=seconds_per_play)
+            outcome_source = OUTCOME_SOURCE_ESPN
+        else:
+            res = classify_drive_end(
+                base.plays,
+                last_snap_touchdown=last_snap_touchdown,
+                last_snap_turnover_on_downs=last_snap_turnover_on_downs,
+                seconds_per_play=seconds_per_play,
+                end_kind_override=None,
+            )
+            outcome_source = (
+                OUTCOME_SOURCE_UNKNOWN if res.kind == DRIVE_END_UNKNOWN else OUTCOME_SOURCE_INFERRED
+            )
+    finished = base.with_computed_stats(seconds_per_play=seconds_per_play, result=res)
+    return replace(finished, outcome_source=outcome_source)
 
 
 def clock_seconds_after_drive_elapsed(current_clock_seconds: int, drive: Drive) -> int:
@@ -452,8 +490,16 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         feed_team_display_name=str(d.get("feed_team_display_name") or ""),
         feed_audit=_drive_feed_audit_from_dict(d.get("feed_audit")),
         session_drive_epoch=_json_opt_session_epoch(d.get("session_drive_epoch")),
+        outcome_source=_json_opt_outcome_source(d.get("outcome_source")),
     )
     return out
+
+
+def _json_opt_outcome_source(raw: Any) -> Optional[str]:
+    s = str(raw or "").strip().lower()
+    if s in (OUTCOME_SOURCE_ESPN, OUTCOME_SOURCE_INFERRED, OUTCOME_SOURCE_UNKNOWN):
+        return s
+    return None
 
 
 def _json_opt_session_epoch(raw: Any) -> Optional[int]:
@@ -511,6 +557,8 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             row["feed_audit"] = asdict(dr.feed_audit)
         if dr.session_drive_epoch is not None:
             row["session_drive_epoch"] = int(dr.session_drive_epoch)
+        if dr.outcome_source:
+            row["outcome_source"] = str(dr.outcome_source)
         payload["drives"].append(row)
     return payload
 
@@ -589,6 +637,9 @@ __all__ = [
     "DRIVE_END_TURNOVER_INT",
     "DRIVE_END_TURNOVER_ON_DOWNS",
     "DRIVE_END_UNKNOWN",
+    "OUTCOME_SOURCE_ESPN",
+    "OUTCOME_SOURCE_INFERRED",
+    "OUTCOME_SOURCE_UNKNOWN",
     "Drive",
     "DriveFeedAuditSnapshot",
     "DriveResult",
