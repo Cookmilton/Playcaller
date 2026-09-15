@@ -60,32 +60,28 @@ def current_feed_plays_merge_allowed(
     possession_team_id: Optional[str],
 ) -> tuple[bool, str]:
     """
-    Whether ``drives.current.plays`` should merge into the live drive log.
+    Whether ``drives.current.plays`` should merge into the live DriveLogger.
 
-    Uses ``drives.current.team.id`` when present, else ``situation`` possession team id.
+    The live log is **always coached-team only**, regardless of ``scope``. Scope
+    ``both`` widens completed-drive storage / Previous-drives UI only — never the
+    in-progress logger. Uses ``drives.current.team.id`` when present, else
+    ``situation`` possession team id.
     """
-    sc = normalize_feed_team_scope(scope)
-    if sc == PREVIOUS_DRIVES_FILTER_BOTH:
-        return True, ""
+    _ = normalize_feed_team_scope(scope)  # accepted for call-site / audit compatibility
     cid = str(coached_team_id or "").strip()
     if not cid:
-        return False, "feed team scope single-team modes need coached_team_id"
+        return False, "current-drive merge skipped (coached_team_id required for live DriveLogger)"
 
     tid = str(current_drive_team_espn_id or "").strip() or str(possession_team_id or "").strip()
     side = classify_feed_team_id_vs_coached(tid, cid)
     if side == "unknown":
         return False, (
-            f"current-drive merge skipped (cannot resolve possessing team id for feed scope **{sc}**; "
-            "use **Both teams** or wait for possession metadata)"
+            "current-drive merge skipped (cannot resolve possessing team id for live DriveLogger; "
+            "wait for possession metadata)"
         )
-    if sc == PREVIOUS_DRIVES_FILTER_OUR and side != "our":
+    if side != "our":
         return False, (
-            "current-drive merge skipped (feed team scope: **Our team only**; "
+            "current-drive merge skipped (live DriveLogger is coached-team only; "
             "current feed drive belongs to opponent)"
-        )
-    if sc == PREVIOUS_DRIVES_FILTER_OPPONENT and side != "opp":
-        return False, (
-            "current-drive merge skipped (feed team scope: **Opponent only**; "
-            "current feed drive belongs to our team)"
         )
     return True, ""
