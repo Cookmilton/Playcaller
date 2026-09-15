@@ -94,7 +94,6 @@ _ADMIN_SUBSTRINGS = (
     "challenged",
     "challenge",
     "measurement",
-    "review",
     "injury timeout",
 )
 
@@ -128,6 +127,102 @@ def _yards(play: Dict[str, Any]) -> int:
         return int(float(v))
     except (TypeError, ValueError):
         return 0
+
+
+def _net_yards_from_espn_field(play: Dict[str, Any]) -> Optional[int]:
+    """
+    Offense net yards from start→end field markers when ``statYardage`` is missing/zero.
+
+    Prefer ``yardsToEndzone`` (gain = start − end). Used for no-play penalties ESPN
+    often publishes with ``statYardage: 0`` while still moving the ball.
+
+    When |YTEZ Δ| > 20 (corrupt on some special-teams no-plays), return None so the
+    caller can parse enforced yards from play text instead of trusting yardLine.
+    """
+    st = play.get("start") if isinstance(play.get("start"), dict) else {}
+    en = play.get("end") if isinstance(play.get("end"), dict) else {}
+    try:
+        sy = st.get("yardsToEndzone")
+        ey = en.get("yardsToEndzone")
+        if sy is not None and ey is not None:
+            delta = int(sy) - int(ey)
+            if abs(delta) > 20:
+                return None
+            return delta
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _parse_enforced_penalty_yards(text_l: str) -> Optional[int]:
+    """Parse ``…, N yards, enforced`` with sign from foul class when ESPN omits statYardage."""
+    if "offsetting" in text_l:
+        return 0
+    m = re.search(r",\s*(\d+)\s*yards?\s*,\s*enforced", text_l)
+    if not m:
+        return None
+    n = int(m.group(1))
+    defensive = any(
+        x in text_l
+        for x in (
+            "defensive holding",
+            "defensive pass interference",
+            "defensive offside",
+            "defensive too many",
+            "illegal contact",
+            "neutral zone",
+            "roughing",
+            "unnecessary roughness",
+            "face mask",
+        )
+    )
+    if defensive:
+        return n
+    return -n
+
+
+def _espn_penalty_net_yards(play: Dict[str, Any], text_l: str) -> int:
+    """
+    Authoritative net for a penalty row: ESPN ``statYardage`` when non-zero; else field change.
+
+    - Offsetting → 0.
+    - Pure declined (stat 0, no enforcement) → 0.
+    - Accepted / nullified / sibling-declined → enforcement yards (``statYardage`` wins even
+      when another foul in the same text is ``declined``).
+    ``penalty_yards`` is left at 0 so drive sums never double-count.
+    """
+    if "offsetting" in text_l and "enforced" not in text_l:
+        return 0
+    yds = _yards(play)
+    # Non-zero ESPN published yards always win (sibling "declined" must not zero these).
+    if yds != 0:
+        return yds
+    if "declined" in text_l and "enforced" not in text_l:
+        return 0
+    derived = _net_yards_from_espn_field(play)
+    if derived is not None and derived != 0:
+        return int(derived)
+    parsed = _parse_enforced_penalty_yards(text_l)
+    if parsed is not None:
+        return int(parsed)
+    return 0
+
+
+def _penalty_actual(play: Dict[str, Any], text_l: str) -> ActualPlayResult:
+    no_play = "no play" in text_l or "nullified" in text_l or (
+        "declined" in text_l and "enforced" not in text_l
+    )
+    net = _espn_penalty_net_yards(play, text_l)
+    return ActualPlayResult(
+        concept_name="Penalty",
+        family="inside_zone",
+        play_type="admin",
+        result_type="no_play" if no_play else "penalty",
+        yards_gained=net,
+        penalty=True,
+        penalty_yards=0,
+        description=f"[ESPN] Penalty · {_short_yards(net)}",
+    )
 
 
 def _infer_target_role(text_l: str) -> Tuple[str, str]:
@@ -182,17 +277,12 @@ def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult
         ("penalty" in text_l or ptype == "penalty")
         and ("touchdown" in text_l or "nullified" in text_l)
     ):
-        no_play = "no play" in text_l or "declined" in text_l or "nullified" in text_l
-        return ActualPlayResult(
-            concept_name="Penalty",
-            family="inside_zone",
-            play_type="admin",
-            result_type="no_play" if no_play else "penalty",
-            yards_gained=yds,
-            penalty=True,
-            penalty_yards=abs(yds),
-            description=f"[ESPN] Penalty · {_short_yards(yds)}",
-        )
+        return _penalty_actual(play, text_l)
+
+    # Explicit ESPN Penalty type before special teams (punt text may still appear on
+    # holding-on-punt no-plays; those must count as penalty nets, not punt yards).
+    if ptype == "penalty":
+        return _penalty_actual(play, text_l)
 
     # --- Touchdown (often embedded in another play type) ---
     if "touchdown" in text_l or ptype == "touchdown":
@@ -353,17 +443,7 @@ def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult
 
     # --- Penalty ---
     if "penalty" in text_l or ptype == "penalty":
-        no_play = "no play" in text_l or "declined" in text_l
-        return ActualPlayResult(
-            concept_name="Penalty",
-            family="inside_zone",
-            play_type="admin",
-            result_type="no_play" if no_play else "penalty",
-            yards_gained=yds,
-            penalty=True,
-            penalty_yards=abs(yds),
-            description=f"[ESPN] Penalty · {_short_yards(yds)}",
-        )
+        return _penalty_actual(play, text_l)
 
     if "scramble" in text_l or " qb rush" in text_l or (ptype == "rushing" and "quarterback" in text_l):
         return ActualPlayResult(
