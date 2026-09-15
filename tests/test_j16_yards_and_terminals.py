@@ -121,7 +121,9 @@ def test_audit_flags_yards_delta_when_computed_diverges() -> None:
         feed_offensive_plays=1,
     )
     d = complete_drive_from_plays(
-        [ActualPlayResult(yards_gained=50, family="inside_zone", play_type="run", result_type="punt", description="Punt")],
+        # Scrimmage run (not result_type=punt): punt nets are excluded from computed_yards.
+        # ESPN still owns total_yards via feed_audit so the audit can flag the delta.
+        [ActualPlayResult(yards_gained=50, family="inside_zone", play_type="run")],
         feed_audit=audit,
         possessing_team="offense",
     )
