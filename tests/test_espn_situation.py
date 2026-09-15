@@ -260,6 +260,16 @@ def test_our_scope_skip_message_names_current_feed_drive() -> None:
     assert allow is False
     assert "current feed drive belongs to opponent" in msg
     assert "possession is opponent" not in msg
+    # Scope "both" must not widen the live logger either.
+    allow_both, msg_both = current_feed_plays_merge_allowed(
+        scope="both",
+        coached_team_id=LAR,
+        current_drive_team_espn_id=SF,
+        possession_team_id=SF,
+    )
+    assert allow_both is False
+    assert "opponent" in msg_both
+    assert "coached-team only" in msg_both
 
 
 def test_possession_change_across_two_syncs_does_not_reset_seen_without_drive_id_change() -> None:
@@ -280,6 +290,7 @@ def test_possession_change_across_two_syncs_does_not_reset_seen_without_drive_id
     seen_after_first = list(session[LIVE_FEED_SEEN_PLAY_IDS])
     assert seen_after_first, "first sync should record ESPN play ids"
     rows_after_first = len(dl.results)
+    coached_ids = [p.external_play_id for p in dl.results]
 
     sb2 = _scoreboard()
     sit2 = sb2["events"][1]["competitions"][0]["situation"]
@@ -301,6 +312,8 @@ def test_possession_change_across_two_syncs_does_not_reset_seen_without_drive_id
     assert session["live_feed_last_current_drive_id"] == "4018726573"
     assert res2.current_drive_plays_merged == 0
     assert res2.drive_log_rows_after == rows_after_first
+    assert [p.external_play_id for p in dl.results] == coached_ids
+    assert any("coached-team only" in str(s) for s in res2.skipped_reasons)
     assert session[LIVE_FEED_SEEN_PLAY_IDS] == seen_after_first
 
 
