@@ -160,6 +160,25 @@ def _espn_play_to_actual_core(play: Dict[str, Any]) -> Optional[ActualPlayResult
 
     pos, role_lbl = _infer_target_role(text_l)
 
+    # --- Nullified scoring / penalties before touchdown substring ---
+    # ESPN embeds "TOUCHDOWN NULLIFIED by Penalty" on holding plays; matching
+    # "touchdown" first falsely marks these as TDs (often with negative yardage).
+    if "nullified" in text_l or (
+        ("penalty" in text_l or ptype == "penalty")
+        and ("touchdown" in text_l or "nullified" in text_l)
+    ):
+        no_play = "no play" in text_l or "declined" in text_l or "nullified" in text_l
+        return ActualPlayResult(
+            concept_name="Penalty",
+            family="inside_zone",
+            play_type="admin",
+            result_type="no_play" if no_play else "penalty",
+            yards_gained=yds,
+            penalty=True,
+            penalty_yards=abs(yds),
+            description=f"[ESPN] Penalty · {_short_yards(yds)}",
+        )
+
     # --- Touchdown (often embedded in another play type) ---
     if "touchdown" in text_l or ptype == "touchdown":
         if "pass" in text_l or "pass" in ptype:
