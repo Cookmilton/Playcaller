@@ -87,3 +87,31 @@ def test_estimated_seconds_between_snaps_does_not_feed_duration() -> None:
     assert all(dr.time_source == TIME_SOURCE_ESPN for dr in trusted)
     # The 38s shadow is stored separately and is not the duration tendencies would see.
     assert all(dr.inferred_time_seconds == dr.play_count * 38 for dr in trusted)
+
+
+def test_detail_line_matches_formatter_and_espn_yards() -> None:
+    from playcaller.drive_audit_report import archived_drive_expander_title_from_audit, compute_drive_audit
+    from playcaller.game import format_drive_detail_line
+    from playcaller.live_data.drive_display import chronological_team_drive_indices, prior_drive_heading
+
+    game = _imported()
+    seq = chronological_team_drive_indices(game)
+    audit = compute_drive_audit(game)
+    by_idx = {row.drive_index: row for row in audit.rows}
+    for i, dr in enumerate(game.drives):
+        assert dr.result is not None
+        expected = format_drive_detail_line(
+            play_count=dr.play_count,
+            total_yards=dr.total_yards,
+            time_elapsed_seconds=dr.time_elapsed_seconds,
+        )
+        assert dr.result.detail_line == expected, f"drive {i + 1}"
+        heading = prior_drive_heading(dr, seq[i])
+        assert expected in heading, f"drive {i + 1} heading={heading!r}"
+        ar = by_idx[i]
+        card = archived_drive_expander_title_from_audit(dr, seq[i], ar)
+        assert expected in card, f"drive {i + 1} card={card!r}"
+    assert "4 yards" in (game.drives[17].result.detail_line or "")
+    assert "34 yards" in (game.drives[18].result.detail_line or "")
+    assert "5 yards" not in (game.drives[17].result.detail_line or "")
+    assert "32 yards" not in (game.drives[18].result.detail_line or "")

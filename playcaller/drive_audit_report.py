@@ -16,6 +16,7 @@ from playcaller.game import (
     Drive,
     DriveFeedAuditSnapshot,
     Game,
+    format_drive_detail_line,
 )
 from playcaller.live_data.drive_display import chronological_team_drive_indices
 from playcaller.live_data.espn_game_state import parse_display_clock_seconds
@@ -175,7 +176,15 @@ def archived_drive_expander_title_from_audit(drive: Drive, team_drive_index: int
     else:
         side = "Our team" if drive.possessing_team == "offense" else "Opponent"
         team_part = f"{side} drive {team_drive_index}"
-    detail = f"{ar.play_count} plays, {ar.total_yards} yards, {ar.reconciled_top_display}"
+    res = drive.result
+    if res and res.detail_line:
+        detail = res.detail_line
+    else:
+        detail = format_drive_detail_line(
+            play_count=int(drive.play_count),
+            total_yards=int(drive.total_yards),
+            time_elapsed_seconds=drive.time_elapsed_seconds,
+        )
     oc = (ar.outcome_reconciled or "").strip() or "Drive"
     return f"{team_part} · {oc} — {detail}"
 

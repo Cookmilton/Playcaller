@@ -109,8 +109,10 @@ def test_archived_title_matches_reconciled_stats() -> None:
     rec = reconcile_drive(d, espn=audit)
     title = archived_drive_expander_title(d, 3, rec)
     assert "Packers" in title or "GB" in title
-    assert str(rec.plays) in title
-    assert str(rec.yards) in title
+    assert d.result is not None
+    assert d.result.detail_line in title
+    assert "42 yards" in title
+    assert "2:34" in title
 
 
 def test_scoring_points_td_fg() -> None:

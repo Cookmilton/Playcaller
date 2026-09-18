@@ -27,6 +27,7 @@ from playcaller.game import (
     _fmt_drive_clock,
     _drive_detail_line,
     drive_result_for_kind,
+    format_drive_detail_line,
 )
 from playcaller.replay.previous_drive_replay import best_presnap_chain_for_drive_plays
 
@@ -346,7 +347,11 @@ def _build_inferred_snapshot(dr: Drive, *, seconds_per_play: int = 38) -> Inferr
     from playcaller.play_event_segment import play_net_yards_for_drive
 
     plays = list(dr.plays)
-    res = dr.result or DriveResult(kind=DRIVE_END_UNKNOWN, headline="Drive ended", detail_line="0 plays, 0 yards, 0:00")
+    res = dr.result or DriveResult(
+        kind=DRIVE_END_UNKNOWN,
+        headline="Drive ended",
+        detail_line=format_drive_detail_line(play_count=0, total_yards=0, time_elapsed_seconds=None),
+    )
     detail = res.detail_line if res.detail_line else _drive_detail_line(plays, seconds_per_play=seconds_per_play)
     net = sum(play_net_yards_for_drive(p) for p in plays)
     n = len(plays)
@@ -616,5 +621,13 @@ def archived_drive_expander_title(
         side = "Our team" if drive.possessing_team == "offense" else "Opponent"
         team_part = f"{side} drive {team_drive_index}"
 
-    detail = f"{rec.plays} plays, {rec.yards} yards, {rec.time_of_possession_display}"
+    res = drive.result
+    if res and res.detail_line:
+        detail = res.detail_line
+    else:
+        detail = format_drive_detail_line(
+            play_count=int(drive.play_count),
+            total_yards=int(drive.total_yards),
+            time_elapsed_seconds=drive.time_elapsed_seconds,
+        )
     return f"{team_part} · {rec.outcome_headline} — {detail}"

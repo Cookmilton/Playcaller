@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from playcaller.game import Drive, Game
+from playcaller.game import Drive, Game, format_drive_detail_line
 
 # ``ui_previous_drives_filter`` / session values (stable strings).
 PREVIOUS_DRIVES_FILTER_OUR = "our"
@@ -100,7 +100,14 @@ def prior_drive_heading(drive: Drive, team_drive_index: int) -> str:
     """
     res = drive.result
     outcome = res.headline if res else "Drive"
-    detail = res.detail_line if res else ""
+    if res and res.detail_line:
+        detail = res.detail_line
+    else:
+        detail = format_drive_detail_line(
+            play_count=int(drive.play_count),
+            total_yards=int(drive.total_yards),
+            time_elapsed_seconds=drive.time_elapsed_seconds,
+        )
 
     ab = str(getattr(drive, "feed_team_abbr", "") or "").strip()
     name = str(getattr(drive, "feed_team_display_name", "") or "").strip()

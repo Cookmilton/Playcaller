@@ -233,6 +233,15 @@ class Drive:
         else:
             elapsed = None
             tsrc = None
+        if r is not None:
+            r = replace(
+                r,
+                detail_line=format_drive_detail_line(
+                    play_count=n,
+                    total_yards=total,
+                    time_elapsed_seconds=elapsed,
+                ),
+            )
         return replace(
             self,
             total_yards=total,
@@ -304,20 +313,40 @@ def _fmt_drive_clock(seconds: int) -> str:
     return f"{m}:{sec:02d}"
 
 
+def format_drive_detail_line(
+    *,
+    play_count: int,
+    total_yards: int,
+    time_elapsed_seconds: Optional[int],
+) -> str:
+    """Single Gamecast stats line: plays, yards, and ESPN TOP when present.
+
+    Omits the clock fragment when duration is unknown. Never prints ``None`` or a
+    placeholder ``0:00``.
+    """
+    n = int(play_count)
+    plays = f"{n} play" if n == 1 else f"{n} plays"
+    yards = f"{int(total_yards)} yards"
+    if time_elapsed_seconds is None:
+        return f"{plays}, {yards}"
+    return f"{plays}, {yards}, {_fmt_drive_clock(int(time_elapsed_seconds))}"
+
+
 def _drive_detail_line(
     plays: List[ActualPlayResult],
     *,
     seconds_per_play: int = 38,
 ) -> str:
+    """Play-sum stats line before ESPN yards/time override (clock omitted)."""
     from playcaller.play_event_segment import counts_as_offensive_snap, play_net_yards_for_drive
 
+    del seconds_per_play  # duration is ESPN-only; never stamp the 38s estimate here
     if not plays:
-        return "0 plays, 0 yards, 0:00"
+        return format_drive_detail_line(play_count=0, total_yards=0, time_elapsed_seconds=None)
     snap_plays = [p for p in plays if counts_as_offensive_snap(p)]
     n = len(snap_plays)
     net = sum(play_net_yards_for_drive(p) for p in plays)
-    elapsed_sec = max(0, int(seconds_per_play) * n)
-    return f"{n} play{'s' if n != 1 else ''}, {net} yards, {_fmt_drive_clock(elapsed_sec)}"
+    return format_drive_detail_line(play_count=n, total_yards=net, time_elapsed_seconds=None)
 
 
 def drive_result_for_kind(
@@ -356,7 +385,9 @@ def classify_drive_end(
             return DriveResult(
                 kind=DRIVE_END_UNKNOWN,
                 headline="Empty drive",
-                detail_line="0 plays, 0 yards, 0:00",
+                detail_line=format_drive_detail_line(
+                    play_count=0, total_yards=0, time_elapsed_seconds=None
+                ),
             )
         return drive_result_for_kind(override, plays, seconds_per_play=seconds_per_play)
 
@@ -364,7 +395,9 @@ def classify_drive_end(
         return DriveResult(
             kind=DRIVE_END_UNKNOWN,
             headline="Empty drive",
-            detail_line="0 plays, 0 yards, 0:00",
+            detail_line=format_drive_detail_line(
+                play_count=0, total_yards=0, time_elapsed_seconds=None
+            ),
         )
 
     last = plays[-1]
@@ -774,6 +807,7 @@ __all__ = [
     "complete_drive_from_plays",
     "flip_possession_after_drive",
     "drive_result_for_kind",
+    "format_drive_detail_line",
     "game_from_dict",
     "game_from_json",
     "game_to_dict",
