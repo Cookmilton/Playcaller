@@ -136,6 +136,7 @@ class DriveFeedAuditSnapshot:
     feed_offensive_plays: Optional[int] = None
     feed_yards: Optional[int] = None
     time_elapsed_display: str = ""
+    time_elapsed_seconds: Optional[int] = None
     first_play_period: Optional[int] = None
     first_play_clock_display: str = ""
     end_period: Optional[int] = None
@@ -156,13 +157,17 @@ YARDS_SOURCE_ESPN = "espn"
 YARDS_SOURCE_COMPUTED = "computed"
 YardsSource = Literal["espn", "computed"]
 
+# Where ``Drive.time_elapsed_seconds`` came from. Missing / not ``espn`` is untrusted.
+TIME_SOURCE_ESPN = "espn"
+TimeSource = Literal["espn"]
+
 
 @dataclass
 class Drive:
     plays: List[ActualPlayResult] = field(default_factory=list)
     total_yards: int = 0
     play_count: int = 0
-    time_elapsed_seconds: int = 0
+    time_elapsed_seconds: Optional[int] = None
     result: Optional[DriveResult] = None
     # Team that had the ball for this drive: ``offense`` = OC / our team, ``defense`` = opponent on offense.
     possessing_team: str = "offense"
@@ -183,6 +188,10 @@ class Drive:
     yards_source: Optional[str] = None
     # Shadow play-inferred kind (audit cross-check); never the exported primary outcome.
     inferred_kind: Optional[str] = None
+    # Provenance for ``time_elapsed_seconds``. Only ``espn`` is a real duration.
+    time_source: Optional[str] = None
+    # Per-play estimate (``seconds_per_play * snaps``); shadow only — never the stored duration.
+    inferred_time_seconds: Optional[int] = None
 
     def with_computed_stats(
         self,
@@ -190,11 +199,12 @@ class Drive:
         seconds_per_play: int = 38,
         result: Optional[DriveResult] = None,
     ) -> "Drive":
+        from playcaller.live_data.espn_drive_audit_parse import parse_espn_time_elapsed_display
         from playcaller.play_event_segment import counts_as_offensive_snap, play_net_yards_for_drive
 
         computed = sum(play_net_yards_for_drive(p) for p in self.plays)
         n = sum(1 for p in self.plays if counts_as_offensive_snap(p))
-        elapsed = max(0, int(seconds_per_play) * n)
+        inferred_elapsed = max(0, int(seconds_per_play) * n)
         r = result if result is not None else self.result
         espn_yards = None
         if self.feed_audit is not None and self.feed_audit.feed_yards is not None:
@@ -208,6 +218,21 @@ class Drive:
         else:
             total = computed
             ysrc = YARDS_SOURCE_COMPUTED
+        espn_sec: Optional[int] = None
+        if self.feed_audit is not None:
+            if self.feed_audit.time_elapsed_seconds is not None:
+                try:
+                    espn_sec = int(self.feed_audit.time_elapsed_seconds)
+                except (TypeError, ValueError):
+                    espn_sec = None
+            if espn_sec is None:
+                espn_sec = parse_espn_time_elapsed_display(self.feed_audit.time_elapsed_display)
+        if espn_sec is not None:
+            elapsed: Optional[int] = espn_sec
+            tsrc: Optional[str] = TIME_SOURCE_ESPN
+        else:
+            elapsed = None
+            tsrc = None
         return replace(
             self,
             total_yards=total,
@@ -215,6 +240,8 @@ class Drive:
             yards_source=ysrc,
             play_count=n,
             time_elapsed_seconds=elapsed,
+            time_source=tsrc,
+            inferred_time_seconds=inferred_elapsed,
             result=r,
             possessing_team=self.possessing_team,
         )
@@ -485,8 +512,15 @@ def complete_drive_from_plays(
 
 
 def clock_seconds_after_drive_elapsed(current_clock_seconds: int, drive: Drive) -> int:
-    """Subtract modeled drive duration from the game clock (non-negative)."""
-    return max(0, int(current_clock_seconds) - int(drive.time_elapsed_seconds))
+    """Subtract ESPN drive duration from the game clock (non-negative).
+
+    When ``time_elapsed_seconds`` is missing, leave the clock unchanged — never
+    subtract the per-play estimate.
+    """
+    elapsed = drive.time_elapsed_seconds
+    if elapsed is None:
+        return max(0, int(current_clock_seconds))
+    return max(0, int(current_clock_seconds) - int(elapsed))
 
 
 def flip_possession_after_drive(game: Game, drive: Drive) -> None:
@@ -527,7 +561,7 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         plays=plays,
         total_yards=int(d.get("total_yards", 0)),
         play_count=int(d.get("play_count", 0)),
-        time_elapsed_seconds=int(d.get("time_elapsed_seconds", 0)),
+        time_elapsed_seconds=_json_opt_int(d.get("time_elapsed_seconds")),
         result=dr,
         possessing_team=_norm_possessing_team(str(d.get("possessing_team", "offense"))),
         feed_import_tag=(str(ftag) if (ftag := d.get("feed_import_tag")) else None),
@@ -540,8 +574,17 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         computed_yards=_json_opt_int(d.get("computed_yards")),
         yards_source=_json_opt_yards_source(d.get("yards_source")),
         inferred_kind=_json_opt_inferred_kind(d.get("inferred_kind")),
+        time_source=_json_opt_time_source(d.get("time_source")),
+        inferred_time_seconds=_json_opt_int(d.get("inferred_time_seconds")),
     )
     return out
+
+
+def _json_opt_time_source(raw: Any) -> Optional[str]:
+    s = str(raw or "").strip().lower()
+    if s == TIME_SOURCE_ESPN:
+        return s
+    return None
 
 
 def _json_opt_inferred_kind(raw: Any) -> Optional[str]:
@@ -720,6 +763,7 @@ __all__ = [
     "OUTCOME_SOURCE_UNKNOWN",
     "YARDS_SOURCE_COMPUTED",
     "YARDS_SOURCE_ESPN",
+    "TIME_SOURCE_ESPN",
     "Drive",
     "DriveFeedAuditSnapshot",
     "DriveResult",

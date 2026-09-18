@@ -7,11 +7,32 @@ stored on ``Game`` beyond this snapshot).
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Literal, Optional
 
 from playcaller.game import DriveFeedAuditSnapshot
 
 _TdExtraPoint = Optional[Literal["pat", "two_point", "pat_missed"]]
+_TIME_ELAPSED_RE = re.compile(r"^(\d{1,3}):(\d{2})$")
+
+
+def parse_espn_time_elapsed_display(display: Optional[str]) -> Optional[int]:
+    """Parse ESPN ``timeElapsed.displayValue`` (``M:SS`` / ``MM:SS``) to elapsed seconds.
+
+    Missing or malformed values return ``None``. Never invents ``0`` or a per-play estimate.
+    A literal ``0:00`` from ESPN is ``0``.
+    """
+    s = str(display or "").strip()
+    if not s:
+        return None
+    m = _TIME_ELAPSED_RE.match(s)
+    if not m:
+        return None
+    minutes = int(m.group(1))
+    seconds = int(m.group(2))
+    if seconds >= 60:
+        return None
+    return minutes * 60 + seconds
 
 
 def _intish(v: Any) -> Optional[int]:
@@ -101,6 +122,7 @@ def parse_drive_feed_audit_from_espn_drive_dict(raw: Dict[str, Any]) -> Optional
 
     te = raw.get("timeElapsed") if isinstance(raw.get("timeElapsed"), dict) else {}
     time_elapsed_display = str(te.get("displayValue") or "").strip()
+    time_elapsed_seconds = parse_espn_time_elapsed_display(time_elapsed_display)
 
     end = raw.get("end") if isinstance(raw.get("end"), dict) else {}
     end_period_obj = end.get("period") if isinstance(end.get("period"), dict) else {}
@@ -132,6 +154,7 @@ def parse_drive_feed_audit_from_espn_drive_dict(raw: Dict[str, Any]) -> Optional
         feed_offensive_plays=feed_offensive_plays,
         feed_yards=feed_yards,
         time_elapsed_display=time_elapsed_display,
+        time_elapsed_seconds=time_elapsed_seconds,
         first_play_period=first_play_period,
         first_play_clock_display=first_play_clock_display,
         end_period=end_period,
