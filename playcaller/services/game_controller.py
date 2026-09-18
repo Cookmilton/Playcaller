@@ -324,6 +324,9 @@ def run_generate_if_requested(
         )
         st.session_state.result = rec
         st.session_state[WAREHOUSE_HISTORICAL_SIGNAL] = hist
+        from playcaller.recommendation_freshness import attach_situation_fingerprint
+
+        attach_situation_fingerprint(rec, ctx, possession=canon.possession)
     except Exception as e:
         st.session_state.result = None
         st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)

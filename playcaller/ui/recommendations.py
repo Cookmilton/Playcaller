@@ -47,6 +47,7 @@ from playcaller.ui.helpers import (
     safe_summary_html,
 )
 from playcaller.streamlit_state.possession import log_result_blocked_reason
+from playcaller.recommendation_freshness import stale_recommendation_reason
 from playcaller.ui.situation_honesty import honesty_from_session
 from playcaller.ui_components import FAM_COLOR, FAM_LABEL, render_field, score_chart
 
@@ -447,8 +448,12 @@ def render_recommendation_panel(
             gen_distance = recommendation_card_distance(ctx)
             ytg = net_yards_to_endzone(str(fctx.territory), int(fctx.yardline))
             log_block = log_result_blocked_reason(game.possession)
+            stale_reason = stale_recommendation_reason(result, ctx, possession=game.possession)
             if log_block:
                 st.caption(log_block)
+            if stale_reason:
+                st.caption(stale_reason)
+            log_disabled = bool(log_block) or bool(stale_reason)
 
             with st.expander("Advanced: outcome dropdown & primary target", expanded=False):
                 st.selectbox("What happened?", LOG_OUTCOME_OPTIONS, index=0, key="main_log_semantic_outcome")
@@ -465,6 +470,14 @@ def render_recommendation_panel(
                 blocked = log_result_blocked_reason(st.session_state.game.possession)
                 if blocked:
                     st.warning(blocked)
+                    return
+                stale_now = stale_recommendation_reason(
+                    st.session_state.result,
+                    ctx,
+                    possession=st.session_state.game.possession,
+                )
+                if stale_now:
+                    st.warning(stale_now)
                     return
                 st.session_state[UNDO_BUNDLE] = {
                     "territory": str(fctx.territory),
@@ -562,30 +575,31 @@ def render_recommendation_panel(
             st.markdown("**Auto / mixed (uses Advanced dropdown if not overridden)**")
             a1, a2, a3, a4, a5, a6, a7, a8 = st.columns(8)
             with a1:
-                if st.button("0", use_container_width=True, key="main_log_yards_0"):
+                if st.button("0", use_container_width=True, disabled=log_disabled, key="main_log_yards_0"):
                     _log_play(0)
             with a2:
-                if st.button("+2", use_container_width=True, key="main_log_yards_plus2"):
+                if st.button("+2", use_container_width=True, disabled=log_disabled, key="main_log_yards_plus2"):
                     _log_play(2)
             with a3:
-                if st.button("+3", use_container_width=True, key="main_log_yards_plus3"):
+                if st.button("+3", use_container_width=True, disabled=log_disabled, key="main_log_yards_plus3"):
                     _log_play(3)
             with a4:
-                if st.button("+5", use_container_width=True, key="main_log_yards_plus5"):
+                if st.button("+5", use_container_width=True, disabled=log_disabled, key="main_log_yards_plus5"):
                     _log_play(5)
             with a5:
-                if st.button("+8", use_container_width=True, key="main_log_yards_plus8"):
+                if st.button("+8", use_container_width=True, disabled=log_disabled, key="main_log_yards_plus8"):
                     _log_play(8)
             with a6:
-                if st.button("+10", use_container_width=True, key="main_log_yards_plus10"):
+                if st.button("+10", use_container_width=True, disabled=log_disabled, key="main_log_yards_plus10"):
                     _log_play(10)
             with a7:
-                if st.button("FD", use_container_width=True, help="First down at the sticks", key="main_log_yards_first_down"):
+                if st.button("FD", use_container_width=True, disabled=log_disabled, help="First down at the sticks", key="main_log_yards_first_down"):
                     _log_play(gen_distance)
             with a8:
                 if st.button(
                     "TD",
                     use_container_width=True,
+                    disabled=log_disabled,
                     help=f"Score — logs {ytg} yds (to goal)",
                     key="main_log_td_score",
                 ):
@@ -594,60 +608,60 @@ def render_recommendation_panel(
             st.markdown("**Complete pass + yards (one tap each)**")
             c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
-                if st.button("C +3", use_container_width=True, key="main_log_c3"):
+                if st.button("C +3", use_container_width=True, disabled=log_disabled, key="main_log_c3"):
                     _log_play(3, outcome_ui_override=_LOG_COMPLETE)
             with c2:
-                if st.button("C +5", use_container_width=True, key="main_log_c5"):
+                if st.button("C +5", use_container_width=True, disabled=log_disabled, key="main_log_c5"):
                     _log_play(5, outcome_ui_override=_LOG_COMPLETE)
             with c3:
-                if st.button("C +8", use_container_width=True, key="main_log_c8"):
+                if st.button("C +8", use_container_width=True, disabled=log_disabled, key="main_log_c8"):
                     _log_play(8, outcome_ui_override=_LOG_COMPLETE)
             with c4:
-                if st.button("C +10", use_container_width=True, key="main_log_c10"):
+                if st.button("C +10", use_container_width=True, disabled=log_disabled, key="main_log_c10"):
                     _log_play(10, outcome_ui_override=_LOG_COMPLETE)
             with c5:
-                if st.button("C FD", use_container_width=True, key="main_log_c_fd"):
+                if st.button("C FD", use_container_width=True, disabled=log_disabled, key="main_log_c_fd"):
                     _log_play(gen_distance, outcome_ui_override=_LOG_COMPLETE)
 
             st.markdown("**Run + yards (one tap each)**")
             r1, r2, r3, r4 = st.columns(4)
             with r1:
-                if st.button("R +3", use_container_width=True, key="main_log_r3"):
+                if st.button("R +3", use_container_width=True, disabled=log_disabled, key="main_log_r3"):
                     _log_play(3, outcome_ui_override=_LOG_RUN)
             with r2:
-                if st.button("R +6", use_container_width=True, key="main_log_r6"):
+                if st.button("R +6", use_container_width=True, disabled=log_disabled, key="main_log_r6"):
                     _log_play(6, outcome_ui_override=_LOG_RUN)
             with r3:
-                if st.button("R FD", use_container_width=True, key="main_log_r_fd"):
+                if st.button("R FD", use_container_width=True, disabled=log_disabled, key="main_log_r_fd"):
                     _log_play(gen_distance, outcome_ui_override=_LOG_RUN)
             with r4:
-                if st.button("R −2", use_container_width=True, key="main_log_r_loss2"):
+                if st.button("R −2", use_container_width=True, disabled=log_disabled, key="main_log_r_loss2"):
                     _log_play(-2, outcome_ui_override=_LOG_RUN)
 
             st.markdown("**Defense / special**")
             d1, d2, d3, d4, d5, d6 = st.columns(6)
             with d1:
-                if st.button("INC", use_container_width=True, help="Incomplete (0)", key="main_log_inc"):
+                if st.button("INC", use_container_width=True, disabled=log_disabled, help="Incomplete (0)", key="main_log_inc"):
                     _log_play(0, forced_incomplete=True)
             with d2:
-                if st.button("INT", use_container_width=True, help="Interception", key="main_log_int"):
+                if st.button("INT", use_container_width=True, disabled=log_disabled, help="Interception", key="main_log_int"):
                     _log_play(0, forced_interception=True)
             with d3:
-                if st.button("SACK", use_container_width=True, key="main_log_yards_sack"):
+                if st.button("SACK", use_container_width=True, disabled=log_disabled, key="main_log_yards_sack"):
                     _log_play(-8, sack_from_chip=True)
             with d4:
-                if st.button("FG made", use_container_width=True, key="main_log_fg_good"):
+                if st.button("FG made", use_container_width=True, disabled=log_disabled, key="main_log_fg_good"):
                     _log_play(0, outcome_ui_override=_LOG_FG_GOOD)
             with d5:
-                if st.button("FG miss", use_container_width=True, key="main_log_fg_miss"):
+                if st.button("FG miss", use_container_width=True, disabled=log_disabled, key="main_log_fg_miss"):
                     _log_play(0, outcome_ui_override=_LOG_FG_MISS)
             with d6:
-                if st.button("TFL", use_container_width=True, help="Run loss −3", key="main_log_tfl"):
+                if st.button("TFL", use_container_width=True, disabled=log_disabled, help="Run loss −3", key="main_log_tfl"):
                     _log_play(-3, outcome_ui_override=_LOG_RUN)
 
             lc1, lc2 = st.columns([3, 1])
             yards_input = lc1.number_input("Custom yards", value=0, step=1, key="main_log_custom_yards_value")
-            if lc2.button("Log custom", use_container_width=True, key="main_log_yards_custom_submit"):
+            if lc2.button("Log custom", use_container_width=True, disabled=log_disabled, key="main_log_yards_custom_submit"):
                 yv = int(yards_input)
                 _log_play(yv, sack_from_chip=yv <= -4)
 
