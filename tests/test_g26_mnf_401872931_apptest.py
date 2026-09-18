@@ -148,6 +148,20 @@ def test_g26_mnf_board_widgets_receive_sync(monkeypatch: pytest.MonkeyPatch) -> 
     assert at.session_state["game_possession_side"] == "Our team"
 
 
+def test_g26_mnf_scope_both_keeps_logger_coached_only() -> None:
+    """c011aca: scope Both still rejects opponent in-progress plays (MNF DEN vs KC ids)."""
+    from playcaller.live_data.feed_team_scope import current_feed_plays_merge_allowed
+
+    allowed, msg = current_feed_plays_merge_allowed(
+        scope="both",
+        coached_team_id=DEN_ID,
+        current_drive_team_espn_id=KC_ID,
+        possession_team_id=KC_ID,
+    )
+    assert allowed is False
+    assert "coached-team only" in msg
+
+
 def test_g26_mnf_stored_drives_match_final(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stored drives after sync: ESPN outcomes/yards, DEN 10 / KC 31 implied, 12/12 split."""
     at, _urls = _boot_and_sync(monkeypatch)
