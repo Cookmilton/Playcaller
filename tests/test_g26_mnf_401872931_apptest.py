@@ -16,6 +16,11 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_SCOREBOARD_ROWS,
     LIVE_FEED_TEAM_SCOPE,
 )
+from playcaller.ui.situation_honesty import (
+    NOT_SYNCED_TEXT,
+    build_situation_honesty,
+    skipped_situation_reasons,
+)
 from tests.espn_sync_board import assert_applied_fields_reached_board, assert_board_matches
 from tests.test_widget_state_retention import APP_FILE, _reset_streamlit_dg_stack, _widget
 
@@ -146,6 +151,67 @@ def test_g26_mnf_board_widgets_receive_sync(monkeypatch: pytest.MonkeyPatch) -> 
         _assert_widget_holds(at, key, SEEDED_BOARD[key])
     assert at.session_state["ui_possession_side"] == "Our team"
     assert at.session_state["game_possession_side"] == "Our team"
+
+
+# Final payload has no situation / period / clock — must skip, not invent Q4 0:00.
+G26A_SKIPPED_SITUATION_FIELDS = (
+    "down",
+    "distance",
+    "field_position",
+    "possession",
+    "quarter",
+    "clock",
+)
+
+
+def test_g26a_final_situation_skips_are_honest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """G2.6a: skipped fields have audit reasons, HUD says not synced, widgets are not invented."""
+    at, _urls = _boot_and_sync(monkeypatch)
+    aud = at.session_state[LIVE_FEED_LAST_AUDIT]
+    reasons = skipped_situation_reasons(aud)
+    for field in G26A_SKIPPED_SITUATION_FIELDS:
+        assert field in reasons, (field, reasons, aud.get("skipped"))
+        assert reasons[field], f"{field} skip reason is empty"
+
+    src = aud.get("situation_source") if isinstance(aud, dict) else None
+    honesty = build_situation_honesty(
+        origin="feed",
+        situation_source=str(src).strip() if src else None,
+        skipped=reasons,
+        possession=at.session_state.game.possession,
+        down=int(at.session_state["ui_down"]),
+        distance=int(at.session_state["ui_distance"]),
+        territory=str(at.session_state["ui_territory"]),
+        yardline=int(at.session_state["ui_yardline"]),
+        own_timeouts=int(at.session_state["ui_own_tos"]),
+        opp_timeouts=int(at.session_state["ui_opp_tos"]),
+        period=int(at.session_state["ui_game_period"]),
+        seconds_in_quarter=int(at.session_state["ui_quarter_clock_mins"]) * 60
+        + int(at.session_state["ui_quarter_clock_secs"]),
+    )
+    for fld in (
+        honesty.down,
+        honesty.distance,
+        honesty.field_position,
+        honesty.possession,
+        honesty.quarter,
+        honesty.clock,
+    ):
+        assert fld.synced is False
+        assert fld.text == NOT_SYNCED_TEXT
+
+    hud = " ".join(str(getattr(m, "value", m)) for m in at.markdown)
+    assert NOT_SYNCED_TEXT in hud, hud
+
+    # Seeded Q3 7:21 must survive; Final must not invent Q4 / 0:00.
+    assert at.session_state["ui_game_period"] == SEEDED_BOARD["ui_game_period"]
+    assert at.session_state["ui_quarter_clock_mins"] == SEEDED_BOARD["ui_quarter_clock_mins"]
+    assert at.session_state["ui_quarter_clock_secs"] == SEEDED_BOARD["ui_quarter_clock_secs"]
+    assert at.session_state["ui_game_period"] != 4
+    assert not (
+        int(at.session_state["ui_quarter_clock_mins"]) == 0
+        and int(at.session_state["ui_quarter_clock_secs"]) == 0
+    )
 
 
 def test_g26_mnf_scope_both_keeps_logger_coached_only() -> None:
