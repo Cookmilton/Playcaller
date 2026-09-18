@@ -16,10 +16,6 @@ from playcaller import (
     FootballPlayPredictor,
     Game,
     GameContext,
-    apply_scoring_after_drive,
-    clock_seconds_after_drive_elapsed,
-    complete_drive_from_plays,
-    flip_possession_after_drive,
 )
 from playcaller.session_game_metadata import audit_context_from_game_metadata
 from playcaller.evaluation.snap_review_lifecycle import (
@@ -29,23 +25,19 @@ from playcaller.evaluation.snap_review_lifecycle import (
     trim_snap_review_opens_for_play_count,
 )
 from playcaller.evaluation.snap_review_logging import merge_streamlit_snap_review_debug
-from playcaller.game import DRIVE_END_UI_AUTO
 from playcaller.history.repository_corpus import load_repository_plays
 from playcaller.history.repository_paths import resolve_history_repository_root
 from playcaller.history.repository_settings import load_history_repository_settings
-from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN, sort_game_drives_by_feed_sequence
-from playcaller.possession import possessing_team_from_feed_plays
+from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     HV_CORPUS_SOURCE,
-    LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_MANUAL_EVENT_FOR_ID,
     HV_REPO_SELECTED_GAME_IDS,
     HV_REPO_USE_ALL_GAMES,
     HV_SESSION_CORPUS_KEY,
     LAST_DRIVE_SNAP_CONTEXT,
     LIVE_FEED_LAST_AUDIT,
-    PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_RERUN_AFTER_WIDGETS,
     UI_HISTORICAL_NUDGE_ENABLED,
@@ -63,9 +55,7 @@ from playcaller.streamlit_state.possession import (
     generate_blocked_reason_for_possession,
     generate_skip_debug_reason,
     mark_board_origin_manual,
-    possession_side_radio_label,
 )
-from playcaller.game_situation_input import context_quarter_from_period
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
 
 
@@ -79,72 +69,43 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     Sole choke point for every **End drive** affordance, including the one-tap row: archiving
     with unset possession would file the drive under our offense via ``_norm_possessing_team``.
     """
+    from playcaller.services.drive_archive import ARCHIVE_KIND_MANUAL, archive_open_drive
+    from playcaller.streamlit_state.keys import LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS, LIVE_FEED_LAST_AUDIT
+
     blocked = end_drive_blocked_reason(st.session_state.game.possession)
     if blocked:
         st.warning(blocked)
         return
     dl = st.session_state.drive_log
-    if dl.results:
-        snap_ctx = st.session_state.get(LAST_DRIVE_SNAP_CONTEXT) or {}
-        if end_kind_override is not None and str(end_kind_override) != DRIVE_END_UI_AUTO:
-            override_kw: dict = {"end_kind_override": str(end_kind_override)}
-        else:
-            end_mode = str(st.session_state.get("ui_drive_end_on_new", DRIVE_END_UI_AUTO))
-            override_kw = (
-                {}
-                if end_mode == DRIVE_END_UI_AUTO
-                else {"end_kind_override": end_mode}
-            )
+    if not dl.results:
         g = st.session_state.game
-        coached_id = str(st.session_state.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) or "").strip()
-        possessing, refuse = possessing_team_from_feed_plays(
-            list(dl.results),
-            coached_team_id=coached_id,
-            fallback_possession=g.possession,
-        )
-        if refuse:
-            st.warning(refuse)
-            return
-        finished = complete_drive_from_plays(
-            list(dl.results),
-            last_snap_touchdown=bool(snap_ctx.get("touchdown")),
-            last_snap_turnover_on_downs=bool(snap_ctx.get("turnover_on_downs")),
-            possessing_team=possessing,
-            **override_kw,
-        )
-        finished.session_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0))
-        apply_scoring_after_drive(g, finished)
-        flip_possession_after_drive(g, finished)
-        g.drives.append(finished)
-        sort_game_drives_by_feed_sequence(g)
-        period = int(st.session_state.get("ui_game_period", 1))
-        g.quarter = context_quarter_from_period(period)
-        clk = int(st.session_state.get("ui_quarter_clock_mins", 0)) * 60 + int(
-            st.session_state.get("ui_quarter_clock_secs", 0)
-        )
-        new_clk = clock_seconds_after_drive_elapsed(clk, finished)
-        g.clock_seconds_remaining = new_clk
-        st.session_state[PENDING_END_DRIVE_UI] = {
-            "ui_quarter_clock_mins": new_clk // 60,
-            "ui_quarter_clock_secs": new_clk % 60,
-            "ui_score_ours": int(g.offense_points),
-            "ui_score_theirs": int(g.defense_points),
-            "ui_possession_side": possession_side_radio_label(
-                possession=g.possession
-            ),
-        }
-    g = st.session_state.game
-    dl.reset()
-    trim_snap_review_opens_for_play_count(g.recommendation_audit, plays_on_drive=len(dl.results))
-    st.session_state.result = None
-    st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
-    st.session_state.last_play_summary = ""
-    clear_in_progress_log_state(st.session_state)
-    aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
-    if isinstance(aud, dict):
-        skipped = [s for s in (aud.get("skipped") or []) if s != PREVIOUS_FEED_DRIVE_OPEN]
-        st.session_state[LIVE_FEED_LAST_AUDIT] = {**aud, "skipped": skipped}
-    st.session_state.eval_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0)) + 1
+        dl.reset()
+        trim_snap_review_opens_for_play_count(g.recommendation_audit, plays_on_drive=len(dl.results))
+        st.session_state.result = None
+        st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
+        st.session_state.last_play_summary = ""
+        clear_in_progress_log_state(st.session_state)
+        aud = st.session_state.get(LIVE_FEED_LAST_AUDIT)
+        if isinstance(aud, dict):
+            skipped = [s for s in (aud.get("skipped") or []) if s != PREVIOUS_FEED_DRIVE_OPEN]
+            st.session_state[LIVE_FEED_LAST_AUDIT] = {**aud, "skipped": skipped}
+        st.session_state.eval_drive_epoch = int(st.session_state.get("eval_drive_epoch", 0)) + 1
+        return
+
+    res = archive_open_drive(
+        st.session_state,
+        kind=ARCHIVE_KIND_MANUAL,
+        end_kind_override=end_kind_override,
+        update_board=True,
+    )
+    if res.refused:
+        st.warning(res.refused)
+        return
+    raw = st.session_state.get(LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS)
+    if res.espn_drive_key and isinstance(raw, list):
+        st.session_state[LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS] = [
+            k for k in raw if str(k) != res.espn_drive_key
+        ]
 
 
 def request_rerun_after_widgets() -> None:

@@ -3,9 +3,10 @@ Drive-boundary helpers: ESPN play ids stay unique across DriveLogger and ``game.
 
 Completed-feed import skips a feed drive only when **every** ESPN play id on that drive
 is already in the live log or an archived drive. When ``drives.current.id`` moves on
-while the logger still holds the previous feed's ids, sync tops up remaining plays by
-id into DriveLogger and reports that the previous feed drive is still open — it does
-not auto-archive (operator **End drive** owns that).
+while the logger still holds the previous feed's ids, sync reports
+``PREVIOUS_FEED_DRIVE_OPEN``. G2.2 auto-close may then archive through the shared
+End-drive path when the leftover appears in ESPN completed drives with a result;
+otherwise the hold stays and the tail is topped up in DriveLogger.
 """
 
 from __future__ import annotations

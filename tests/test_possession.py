@@ -159,8 +159,8 @@ def test_end_drive_blocked_reason_matches_generate_and_log() -> None:
 def test_end_drive_guard_runs_before_any_archive_work() -> None:
     from pathlib import Path
 
-    src = Path(__file__).resolve().parents[1] / "playcaller" / "services" / "game_controller.py"
-    body = src.read_text(encoding="utf-8").split("def archive_current_drive_and_reset_session(", 1)[1]
+    src = Path(__file__).resolve().parents[1] / "playcaller" / "services" / "drive_archive.py"
+    body = src.read_text(encoding="utf-8").split("def archive_open_drive(", 1)[1]
     guard = body.index("end_drive_blocked_reason(")
     assert guard < body.index("complete_drive_from_plays(")
     assert guard < body.index("flip_possession_after_drive(")

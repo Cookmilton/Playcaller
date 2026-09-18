@@ -50,6 +50,8 @@ LIVE_SYNC_TOAST = "live_sync_toast"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
 # treats ``st.rerun()`` as a completed run and drops widget keys that never instantiated.
 PENDING_RERUN_AFTER_WIDGETS = "pending_rerun_after_widgets"
+# Pre-widget undo of the last archived drive (manual End drive or G2.2 auto-close).
+PENDING_UNDO_DRIVE_ARCHIVE = "pending_undo_drive_archive"
 
 # --- Snap / undo (not pending dicts; cleared with in-progress log helpers) ---
 LAST_DRIVE_SNAP_CONTEXT = "last_drive_snap_context"
@@ -84,6 +86,10 @@ LIVE_FEED_SEEN_PLAY_IDS = "live_feed_seen_play_ids"
 LIVE_FEED_LAST_POSSESSION_TEAM_ID = "live_feed_last_possession_team_id"
 # Last ESPN ``drives.current.id`` applied; seen-play-id reset keys on this, not board possession.
 LIVE_FEED_LAST_CURRENT_DRIVE_ID = "live_feed_last_current_drive_id"
+# ESPN completed-drive stable keys that G2.2 must not auto-close (set by G2.3 undo of auto).
+LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS = "live_feed_auto_close_suppress_keys"
+# Snapshots for undoing End-drive / auto-close archives (non-widget).
+DRIVE_ARCHIVE_UNDO_STACK = "drive_archive_undo_stack"
 # Operator vs preset origin for personnel/box/coverage/safeties (not a widget; never ESPN-observed).
 DEFENSE_LOOK_ORIGIN = "defense_look_origin"
 # Persists the operator's **Our team** ESPN id for the current session/game; survives ``clear_live_feed_session_keys``.

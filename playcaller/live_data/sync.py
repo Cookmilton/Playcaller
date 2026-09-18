@@ -75,6 +75,7 @@ from .drive_boundaries import (
     espn_play_ids_from_archived_drives,
     occupied_espn_play_ids,
 )
+from .auto_close_leftover import try_auto_close_leftover_drive
 from .espn_current_drive_merge import (
     merge_current_espn_plays_into_drive_log,
     persist_seen_play_ids,
@@ -240,6 +241,33 @@ def apply_snapshot(
             session[key] = int(raw)
             applied.append(field)
 
+    # Leftover auto-close uses the board possession from *before* this snapshot's
+    # possession write — the leftover drive belongs to the prior sideline state.
+    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
+    leftover_open = drive_log_holds_previous_feed_drive(
+        drive_log,
+        snapshot.current_feed_drive_plays,
+        current_feed_drive_id=snapshot.current_feed_drive_id,
+        last_feed_drive_id=str(last_drive_id) if last_drive_id else None,
+    )
+    if leftover_open and snapshot.completed_feed_drives:
+        if try_auto_close_leftover_drive(
+            game=game,
+            session=session,
+            drive_log=drive_log,
+            completed=snapshot.completed_feed_drives,
+        ):
+            leftover_open = drive_log_holds_previous_feed_drive(
+                drive_log,
+                snapshot.current_feed_drive_plays,
+                current_feed_drive_id=snapshot.current_feed_drive_id,
+                last_feed_drive_id=str(last_drive_id) if last_drive_id else None,
+            )
+            if not leftover_open:
+                applied.append("auto_closed_leftover_drive")
+    if leftover_open:
+        skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
+
     # Possession is not covered by either lock (it decides which sideline the board shows).
     if not has_situation:
         _skip_field(skipped, "possession", SKIP_NO_SITUATION_SOURCE)
@@ -297,16 +325,6 @@ def apply_snapshot(
             applied.append("field_position")
 
     feed_scope = normalize_feed_team_scope(str(session.get(LIVE_FEED_TEAM_SCOPE) or ""))
-
-    last_drive_id = session.get(LIVE_FEED_LAST_CURRENT_DRIVE_ID)
-    leftover_open = drive_log_holds_previous_feed_drive(
-        drive_log,
-        snapshot.current_feed_drive_plays,
-        current_feed_drive_id=snapshot.current_feed_drive_id,
-        last_feed_drive_id=str(last_drive_id) if last_drive_id else None,
-    )
-    if leftover_open:
-        skipped.append(PREVIOUS_FEED_DRIVE_OPEN)
 
     seen: Set[str] = prepare_seen_play_ids_for_feed(
         session,
