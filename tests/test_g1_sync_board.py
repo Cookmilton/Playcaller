@@ -172,18 +172,17 @@ def test_load_json_scores_arrive_on_board() -> None:
 
 
 def test_sync_backend_tripwire_skips_when_hydrate_pending() -> None:
-    from unittest.mock import patch
+    """G2.5: under pytest the same hit raises; ``game_*`` is not overwritten."""
+    from playcaller.streamlit_state.hydrate_tripwire import HydrateClobberError
 
     ss = {
         GAME_WIDGET_HYDRATE_PENDING: True,
         "game_down": 2,
         "ui_down": 1,
     }
-    with patch("playcaller.streamlit_state.widget_backend_bridge.logger.warning") as warn:
+    with pytest.raises(HydrateClobberError, match="GAME_WIDGET_HYDRATE_PENDING"):
         sync_backend_from_widgets(ss)
     assert ss["game_down"] == 2
-    warn.assert_called()
-    assert "GAME_WIDGET_HYDRATE_PENDING" in warn.call_args[0][0]
 
 
 def test_live_sync_flag_is_plain_session_key() -> None:

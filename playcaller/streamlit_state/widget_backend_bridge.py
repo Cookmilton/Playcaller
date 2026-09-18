@@ -60,6 +60,7 @@ from playcaller.streamlit_state.keys import (
     GAME_WIDGET_HYDRATE_PENDING,
     GAME_YARDLINE,
 )
+from playcaller.streamlit_state.hydrate_tripwire import HydrateClobberError, raise_on_hydrate_clobber
 from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
 
@@ -230,10 +231,13 @@ def sync_widgets_from_backend(ss: MutableMapping[str, Any]) -> None:
 def sync_backend_from_widgets(ss: MutableMapping[str, Any]) -> None:
     """Copy operator-facing widgets into backend mirrors (feed / export consistency)."""
     if ss.get(GAME_WIDGET_HYDRATE_PENDING):
-        logger.warning(
+        msg = (
             "playcaller: sync_backend_from_widgets ran while GAME_WIDGET_HYDRATE_PENDING is still "
             "set — ui_* would overwrite feed/load game_* (C.5 clobber). Skip the copy."
         )
+        if raise_on_hydrate_clobber():
+            raise HydrateClobberError(msg)
+        logger.warning(msg)
         return
     for gk, uk in GAME_UI_MIRROR_PAIRS:
         if uk in ss:
