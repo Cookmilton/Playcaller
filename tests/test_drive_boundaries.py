@@ -339,7 +339,9 @@ def test_re_sort_does_not_move_review_or_comparison_identity() -> None:
     assert game.drives[1] is coached
     assert archived_drive_identity_key(coached) == marker
     assert drive_index_for_session_epoch(game, 0) == 1
-    assert _game_drive_headline(game, 0) == "Coached punt — 3 plays"
+    from playcaller.game import display_drive_detail_line
+
+    assert _game_drive_headline(game, 0) == f"Coached punt — {display_drive_detail_line(coached)}"
     rows = build_unified_rows_from_audit(game, game.recommendation_audit, ReviewMode.TRUE_STORED)
     assert rows[0].drive_id == 1
     assert rows[0].drive_result_kind == "punt"

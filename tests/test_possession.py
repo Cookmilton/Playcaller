@@ -364,5 +364,5 @@ def test_game_controller_does_not_import_playcaller_ui() -> None:
     assert "from playcaller.ui" not in text
     assert "import playcaller.ui" not in text
     assert "from playcaller.streamlit_state.possession import" in text
-    assert "generate_blocked_reason_for_possession" in text
-    assert "generate_skip_debug_reason" in text
+    assert "generate_blocked_reason_for_session" in text
+    assert "generate_skip_debug_reason_for_session" in text
