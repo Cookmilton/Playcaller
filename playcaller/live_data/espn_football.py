@@ -17,6 +17,7 @@ from .espn_game_date import resolve_espn_game_date
 from .espn_play_text_players import play_text_from_espn_row
 from .espn_situation import resolve_espn_situation, situation_timeouts_for_coached_team
 from .espn_summary_teams import team_label_pair, team_labels_from_espn_summary
+from .espn_live_capture import capture_espn_payload
 from .http_util import fetch_json
 from .types import FeedPlayEvent, FetchResult, NormalizedGameSnapshot
 
@@ -470,6 +471,11 @@ class EspnFootballProvider:
                 "ESPN scoreboard fetch failed (%s); situation falls back to drives.current play end.",
                 e,
             )
+
+        if isinstance(getattr(res, "data", None), dict):
+            capture_espn_payload(str(event_id), "summary", res.data)
+        if isinstance(scoreboard_payload, dict):
+            capture_espn_payload(str(event_id), "scoreboard", scoreboard_payload)
 
         try:
             snap = parse_espn_summary(
