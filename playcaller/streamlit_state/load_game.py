@@ -74,12 +74,13 @@ def apply_pending_load_game(ss: MutableMapping[str, Any]) -> None:
         return
 
     g0 = ss["game"]
-    gq = max(1, min(5, int(getattr(g0, "quarter", 1) or 1)))
-    raw_clk = int(getattr(g0, "clock_seconds_remaining", 0) or 0)
-    sec = clamp_quarter_clock_seconds(gq, raw_clk)
-    ss[GAME_PERIOD] = gq
-    ss[GAME_QUARTER_CLOCK_MINS] = sec // 60
-    ss[GAME_QUARTER_CLOCK_SECS] = sec % 60
+    if g0.quarter is not None:
+        ss[GAME_PERIOD] = max(1, min(5, int(g0.quarter)))
+    if g0.clock_seconds_remaining is not None:
+        gq = int(ss.get(GAME_PERIOD, 1))
+        sec = clamp_quarter_clock_seconds(gq, int(g0.clock_seconds_remaining))
+        ss[GAME_QUARTER_CLOCK_MINS] = sec // 60
+        ss[GAME_QUARTER_CLOCK_SECS] = sec % 60
     ss[GAME_SCORE_OURS] = int(g0.offense_points)
     ss[GAME_SCORE_THEIRS] = int(g0.defense_points)
     ss[GAME_POSSESSION_SIDE] = possession_side_radio_label(possession=g0.possession)

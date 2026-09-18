@@ -266,7 +266,7 @@ class Game:
     defense_points: int = 0
     # ``offense`` | ``defense`` | ``None`` (fresh / new-game board has no side yet).
     possession: Optional[str] = None
-    quarter: int = 1
+    quarter: Optional[int] = None
     clock_seconds_remaining: Optional[int] = None
     # Snap-level review timeline (model-at-Generate + optional ``linked_actual``); JSON ``snap_review_log`` alias.
     recommendation_audit: List[Dict[str, Any]] = field(default_factory=list)
@@ -742,8 +742,8 @@ def game_from_dict(data: Dict[str, Any]) -> Game:
         offense_points=int(data.get("offense_points", 0)),
         defense_points=int(data.get("defense_points", 0)),
         possession=_possession_from_export(data),
-        quarter=int(data.get("quarter", 1)),
-        clock_seconds_remaining=data.get("clock_seconds_remaining"),
+        quarter=_json_opt_int(data.get("quarter")),
+        clock_seconds_remaining=_json_opt_int(data.get("clock_seconds_remaining")),
         recommendation_audit=audit,
         session_metadata=session_metadata,
     )

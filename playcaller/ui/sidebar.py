@@ -93,11 +93,11 @@ from playcaller.streamlit_state.widget_backend_bridge import (
     GAME_YARDLINE_RANGE,
 )
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
+from playcaller.streamlit_state.feed_board_copy import generate_blocked_reason_for_session
 from playcaller.streamlit_state.possession import (
     POSSESSION_RADIO_OPTIONS,
     UI_POSSESSION_UNSET,
     end_drive_blocked_reason,
-    generate_blocked_reason_for_possession,
     possession_side_radio_label,
 )
 from playcaller.streamlit_state.session import (
@@ -181,7 +181,9 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
     """Returns ``(sidebar_generate_submitted, export_slot)`` — fill ``export_slot`` after main console."""
     generate = False
     export_slot = None
-    generate_block = generate_blocked_reason_for_possession(game.possession)
+    generate_block = generate_blocked_reason_for_session(
+        st.session_state, possession=game.possession
+    )
     with st.sidebar:
 
         st.markdown(

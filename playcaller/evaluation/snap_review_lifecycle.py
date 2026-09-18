@@ -103,7 +103,7 @@ def scoreboard_snapshot_from_game(game: Game) -> Dict[str, Any]:
     return {
         "offense_points": int(game.offense_points),
         "defense_points": int(game.defense_points),
-        "quarter": int(game.quarter),
+        "quarter": int(game.quarter) if game.quarter is not None else None,
         "clock_seconds_remaining": game.clock_seconds_remaining,
     }
 

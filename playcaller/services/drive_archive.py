@@ -41,13 +41,16 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_CURRENT_DRIVE_ID,
+    LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_MERGED_ESPN_DRIVE_KEYS,
     LIVE_FEED_SEEN_PLAY_IDS,
     PENDING_END_DRIVE_UI,
     WAREHOUSE_HISTORICAL_SIGNAL,
 )
+from playcaller.streamlit_state.feed_board_copy import copy_derived_clock_to_game, skipped_feed_fields
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
 from playcaller.streamlit_state.possession import (
+    ORIGIN_FEED,
     end_drive_blocked_reason,
     possession_side_radio_label,
 )
@@ -108,7 +111,7 @@ def _snapshot_archive_state(ss: MutableMapping[str, Any]) -> Dict[str, Any]:
         "game_possession_side": ss.get(GAME_POSSESSION_SIDE),
         "offense_points": int(game.offense_points),
         "defense_points": int(game.defense_points),
-        "quarter": int(game.quarter),
+        "quarter": game.quarter,
         "clock_seconds_remaining": game.clock_seconds_remaining,
         "game_score_ours": ss.get(GAME_SCORE_OURS),
         "game_score_theirs": ss.get(GAME_SCORE_THEIRS),
@@ -181,7 +184,11 @@ def restore_last_drive_archive(ss: MutableMapping[str, Any]) -> bool:
         ss[GAME_POSSESSION_SIDE] = side
     game.offense_points = int(entry.get("offense_points", 0))
     game.defense_points = int(entry.get("defense_points", 0))
-    game.quarter = int(entry.get("quarter", game.quarter))
+    raw_q = entry.get("quarter")
+    if raw_q is None:
+        game.quarter = None
+    else:
+        game.quarter = int(raw_q)
     game.clock_seconds_remaining = entry.get("clock_seconds_remaining")
     if entry.get("game_score_ours") is not None:
         ss[GAME_SCORE_OURS] = int(entry["game_score_ours"])
@@ -271,17 +278,25 @@ def archive_open_drive(
 
     if update_board:
         period = int(ss.get("ui_game_period", 1))
-        game.quarter = context_quarter_from_period(period)
         clk = int(ss.get("ui_quarter_clock_mins", 0)) * 60 + int(ss.get("ui_quarter_clock_secs", 0))
         new_clk = clock_seconds_after_drive_elapsed(clk, finished)
-        game.clock_seconds_remaining = new_clk
-        ss[PENDING_END_DRIVE_UI] = {
-            "ui_quarter_clock_mins": new_clk // 60,
-            "ui_quarter_clock_secs": new_clk % 60,
+        copy_derived_clock_to_game(
+            game,
+            ss,
+            quarter=context_quarter_from_period(period),
+            seconds_remaining=new_clk,
+        )
+        pending: Dict[str, Any] = {
             "ui_score_ours": int(game.offense_points),
             "ui_score_theirs": int(game.defense_points),
             "ui_possession_side": possession_side_radio_label(possession=game.possession),
         }
+        origin = str(ss.get(LIVE_FEED_LAST_ORIGIN) or "")
+        skipped = skipped_feed_fields(ss)
+        if origin != ORIGIN_FEED or "clock" not in skipped:
+            pending["ui_quarter_clock_mins"] = new_clk // 60
+            pending["ui_quarter_clock_secs"] = new_clk % 60
+        ss[PENDING_END_DRIVE_UI] = pending
         ss[GAME_POSSESSION_SIDE] = possession_side_radio_label(possession=game.possession)
 
     dl.reset()

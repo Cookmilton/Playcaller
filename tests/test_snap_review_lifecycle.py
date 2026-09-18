@@ -176,3 +176,10 @@ def test_scoreboard_snapshot_matches_game() -> None:
         "quarter": 2,
         "clock_seconds_remaining": 333,
     }
+
+
+def test_scoreboard_snapshot_unset_quarter_is_null() -> None:
+    g = Game.new_game()
+    snap = scoreboard_snapshot_from_game(g)
+    assert snap["quarter"] is None
+    assert snap["clock_seconds_remaining"] is None

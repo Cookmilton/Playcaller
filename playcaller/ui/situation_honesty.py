@@ -14,6 +14,7 @@ from typing import Any, Mapping, Optional
 
 from playcaller.game_situation_input import format_ball_spot, format_down_distance, period_display_label
 from playcaller.live_data.drive_boundaries import PREVIOUS_FEED_DRIVE_OPEN
+from playcaller.streamlit_state.feed_board_copy import generate_blocked_reason_for_feed_board
 from playcaller.streamlit_state.possession import (
     GENERATE_OPPONENT_REASON,
     ORIGIN_FEED,
@@ -337,7 +338,11 @@ def build_situation_honesty(
         opp_timeouts=opp_f,
         quarter=quarter_f,
         clock=clock_f,
-        generate_blocked_reason=generate_blocked_reason_for_possession(possession),
+        generate_blocked_reason=generate_blocked_reason_for_feed_board(
+            origin=origin,
+            skipped=skipped,
+            possession=possession,
+        ),
         unsynced_board_warning=unsynced_board_warning(
             origin=origin, situation_source=src, skipped=skipped
         ),

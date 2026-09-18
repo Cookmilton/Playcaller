@@ -50,10 +50,12 @@ from playcaller.warehouse.binding import build_warehouse_binding
 from playcaller.services.predictor_with_history import get_recommendation_with_history
 from football_history_warehouse.consumer import try_client_from_env
 from playcaller.streamlit_state.pending import clear_in_progress_log_state
+from playcaller.streamlit_state.feed_board_copy import (
+    generate_blocked_reason_for_session,
+    generate_skip_debug_reason_for_session,
+)
 from playcaller.streamlit_state.possession import (
     end_drive_blocked_reason,
-    generate_blocked_reason_for_possession,
-    generate_skip_debug_reason,
     mark_board_origin_manual,
 )
 from playcaller.streamlit_state.ui_write_guard import assign_session_state
@@ -284,7 +286,9 @@ def run_generate_if_requested(
         )
         return
     canon = st.session_state.game
-    skip_reason = generate_skip_debug_reason(canon.possession)
+    skip_reason = generate_skip_debug_reason_for_session(
+        st.session_state, possession=canon.possession
+    )
     if skip_reason is not None:
         merge_streamlit_snap_review_debug(
             st.session_state,
@@ -293,7 +297,9 @@ def run_generate_if_requested(
             sidebar_generate=bool(sidebar_generate),
             main_generate=bool(main_generate),
             ui_auto_generate=bool(st.session_state.ui_auto_generate),
-            generate_blocked=generate_blocked_reason_for_possession(canon.possession),
+            generate_blocked=generate_blocked_reason_for_session(
+                st.session_state, possession=canon.possession
+            ),
         )
         assign_session_state(st.session_state, "ui_auto_generate", False, context="run_generate_if_requested")
         return

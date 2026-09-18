@@ -23,6 +23,7 @@ from playcaller.streamlit_state.keys import (
 )
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
 from playcaller.streamlit_state.possession import apply_possession_from_ui
+from playcaller.streamlit_state.feed_board_copy import copy_derived_clock_to_game
 from playcaller.streamlit_state.widget_backend_bridge import refresh_derived_game_context_cache
 
 
@@ -57,8 +58,7 @@ def build_game_context_from_session_state(ss: MutableMapping[str, Any]) -> GameC
     game.offense_points = int(ss.get(GAME_SCORE_OURS, ss.get("ui_score_ours", 0)))
     game.defense_points = int(ss.get(GAME_SCORE_THEIRS, ss.get("ui_score_theirs", 0)))
     score_diff = score_diff_from_board(our_score=game.offense_points, their_score=game.defense_points)
-    game.quarter = quarter
-    game.clock_seconds_remaining = seconds_remaining
+    copy_derived_clock_to_game(game, ss, quarter=quarter, seconds_remaining=seconds_remaining)
     own_timeouts = int(ss.get(GAME_OWN_TOS, ss["ui_own_tos"]))
     opp_timeouts = int(ss.get(GAME_OPP_TOS, ss["ui_opp_tos"]))
     weather = str(ss["ui_weather"])

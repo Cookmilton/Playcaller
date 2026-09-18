@@ -87,6 +87,7 @@ from playcaller.streamlit_state.ui_defaults import new_game_ui_values
 from playcaller.streamlit_state.ui_write_guard import reset_ui_write_guard
 from playcaller.streamlit_state.session_setup import apply_session_setup_widgets_to_game
 from playcaller.streamlit_state.possession import apply_possession_from_ui
+from playcaller.streamlit_state.feed_board_copy import copy_derived_clock_to_game
 from playcaller.streamlit_state.widget_backend_bridge import (
     log_development_mirror_audit,
     reconcile_widget_and_backend_state,
@@ -192,8 +193,9 @@ if __name__ == "__main__":
     game.offense_points = int(st.session_state.get(GAME_SCORE_OURS, 0))
     game.defense_points = int(st.session_state.get(GAME_SCORE_THEIRS, 0))
     score_diff = score_diff_from_board(our_score=game.offense_points, their_score=game.defense_points)
-    game.quarter = quarter
-    game.clock_seconds_remaining = seconds_remaining
+    copy_derived_clock_to_game(
+        game, st.session_state, quarter=quarter, seconds_remaining=seconds_remaining
+    )
     own_timeouts = int(st.session_state.get("ui_own_tos", _ui["ui_own_tos"]))
     opp_timeouts = int(st.session_state.get("ui_opp_tos", _ui["ui_opp_tos"]))
     weather = str(st.session_state.get("ui_weather", _ui["ui_weather"]))
