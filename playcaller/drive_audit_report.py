@@ -16,7 +16,8 @@ from playcaller.game import (
     Drive,
     DriveFeedAuditSnapshot,
     Game,
-    format_drive_detail_line,
+    display_drive_detail_line,
+    trusted_time_elapsed_seconds,
 )
 from playcaller.live_data.drive_display import chronological_team_drive_indices
 from playcaller.live_data.espn_game_state import parse_display_clock_seconds
@@ -176,16 +177,8 @@ def archived_drive_expander_title_from_audit(drive: Drive, team_drive_index: int
     else:
         side = "Our team" if drive.possessing_team == "offense" else "Opponent"
         team_part = f"{side} drive {team_drive_index}"
-    res = drive.result
-    if res and res.detail_line:
-        detail = res.detail_line
-    else:
-        detail = format_drive_detail_line(
-            play_count=int(drive.play_count),
-            total_yards=int(drive.total_yards),
-            time_elapsed_seconds=drive.time_elapsed_seconds,
-        )
     oc = (ar.outcome_reconciled or "").strip() or "Drive"
+    detail = display_drive_detail_line(drive)
     return f"{team_part} · {oc} — {detail}"
 
 
@@ -555,7 +548,7 @@ def compute_drive_audit(game: Game) -> DriveAuditReport:
                 "outcome_mismatch": outcome_mismatch,
                 "play_count": rec.plays,
                 "total_yards": rec.yards,
-                "time_elapsed_seconds": dr.time_elapsed_seconds,
+                "time_elapsed_seconds": trusted_time_elapsed_seconds(dr),
                 "espn_top_display": (audit.time_elapsed_display if audit else "") or "—",
                 "score_start_us": score_off_start,
                 "score_start_them": score_def_start,

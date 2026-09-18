@@ -388,22 +388,7 @@ def _drive_header(
     seq = chronological_team_drive_indices(game)
     team_n = seq[drive_id] if drive_id < len(seq) else drive_id + 1
     base = prior_drive_heading(dr, team_n)
-    res = dr.result
-    suffix = ""
-    if res:
-        suffix = f" · {res.headline}"
-    plays = getattr(dr, "plays", None) or []
-    nplays = len(plays)
-    net_yards = sum(int(getattr(p, "yards_gained", 0) or 0) for p in plays)
-    elapsed = int(getattr(dr, "time_elapsed_seconds", 0) or 0)
-    if not elapsed and nplays:
-        elapsed = 38 * nplays
-    m, s = divmod(max(0, elapsed), 60)
-    time_s = f"~{m}:{s:02d} game clock" if elapsed else ""
-    yards_s = f"{net_yards:+d} yds" if nplays else "0 yds"
-    bits = [f"{base}{suffix}", f"{nplays} plays", yards_s]
-    if time_s:
-        bits.append(time_s)
+    bits = [base]
     if grade is not None:
         if grade.letter == "—":
             bits.append("Grade —")

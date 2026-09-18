@@ -26,8 +26,10 @@ from playcaller.game import (
     DriveResult,
     _fmt_drive_clock,
     _drive_detail_line,
+    display_drive_detail_line,
     drive_result_for_kind,
     format_drive_detail_line,
+    trusted_time_elapsed_seconds,
 )
 from playcaller.replay.previous_drive_replay import best_presnap_chain_for_drive_plays
 
@@ -484,12 +486,15 @@ def reconcile_drive(
         prov["yards"] = "inferred"
 
     # --- TOP ---
-    top_s = _fmt_drive_clock(inf.time_elapsed_seconds)
-    top_disp = top_s
+    trusted = trusted_time_elapsed_seconds(drive)
     if raw.time_of_possession_display:
         top_disp = raw.time_of_possession_display
         prov["time_of_possession"] = "espn"
+    elif trusted is not None:
+        top_disp = _fmt_drive_clock(trusted)
+        prov["time_of_possession"] = "espn"
     else:
+        top_disp = "—"
         prov["time_of_possession"] = "inferred"
 
     # --- Start field ---
@@ -621,13 +626,5 @@ def archived_drive_expander_title(
         side = "Our team" if drive.possessing_team == "offense" else "Opponent"
         team_part = f"{side} drive {team_drive_index}"
 
-    res = drive.result
-    if res and res.detail_line:
-        detail = res.detail_line
-    else:
-        detail = format_drive_detail_line(
-            play_count=int(drive.play_count),
-            total_yards=int(drive.total_yards),
-            time_elapsed_seconds=drive.time_elapsed_seconds,
-        )
+    detail = display_drive_detail_line(drive)
     return f"{team_part} · {rec.outcome_headline} — {detail}"

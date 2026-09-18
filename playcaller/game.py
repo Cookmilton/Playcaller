@@ -332,6 +332,28 @@ def format_drive_detail_line(
     return f"{plays}, {yards}, {_fmt_drive_clock(int(time_elapsed_seconds))}"
 
 
+def trusted_time_elapsed_seconds(drive: Drive) -> Optional[int]:
+    """Stored duration only when ``time_source`` is ESPN. Missing source is untrusted."""
+    if str(getattr(drive, "time_source", None) or "") != TIME_SOURCE_ESPN:
+        return None
+    raw = getattr(drive, "time_elapsed_seconds", None)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def display_drive_detail_line(drive: Drive) -> str:
+    """Plays and yards plus ESPN TOP when trusted. Never treats an untrusted duration as real."""
+    return format_drive_detail_line(
+        play_count=int(drive.play_count),
+        total_yards=int(drive.total_yards),
+        time_elapsed_seconds=trusted_time_elapsed_seconds(drive),
+    )
+
+
 def _drive_detail_line(
     plays: List[ActualPlayResult],
     *,
@@ -547,10 +569,10 @@ def complete_drive_from_plays(
 def clock_seconds_after_drive_elapsed(current_clock_seconds: int, drive: Drive) -> int:
     """Subtract ESPN drive duration from the game clock (non-negative).
 
-    When ``time_elapsed_seconds`` is missing, leave the clock unchanged — never
-    subtract the per-play estimate.
+    When ESPN duration is missing, leave the clock unchanged — never subtract
+    the per-play estimate or an untrusted legacy number.
     """
-    elapsed = drive.time_elapsed_seconds
+    elapsed = trusted_time_elapsed_seconds(drive)
     if elapsed is None:
         return max(0, int(current_clock_seconds))
     return max(0, int(current_clock_seconds) - int(elapsed))
@@ -607,6 +629,8 @@ def _drive_from_dict(d: Dict[str, Any]) -> Drive:
         computed_yards=_json_opt_int(d.get("computed_yards")),
         yards_source=_json_opt_yards_source(d.get("yards_source")),
         inferred_kind=_json_opt_inferred_kind(d.get("inferred_kind")),
+        # Missing ``time_source`` (legacy exports) is untrusted — keep the stored
+        # seconds but do not treat them as ESPN duration. Never rewrite the file.
         time_source=_json_opt_time_source(d.get("time_source")),
         inferred_time_seconds=_json_opt_int(d.get("inferred_time_seconds")),
     )
@@ -688,6 +712,8 @@ def game_to_dict(game: Game) -> Dict[str, Any]:
             "total_yards": dr.total_yards,
             "play_count": dr.play_count,
             "time_elapsed_seconds": dr.time_elapsed_seconds,
+            "time_source": dr.time_source,
+            "inferred_time_seconds": dr.inferred_time_seconds,
             "possessing_team": dr.possessing_team,
             "result": asdict(res) if res else None,
         }
@@ -808,6 +834,8 @@ __all__ = [
     "flip_possession_after_drive",
     "drive_result_for_kind",
     "format_drive_detail_line",
+    "display_drive_detail_line",
+    "trusted_time_elapsed_seconds",
     "game_from_dict",
     "game_from_json",
     "game_to_dict",
