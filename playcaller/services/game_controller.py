@@ -70,7 +70,7 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     with unset possession would file the drive under our offense via ``_norm_possessing_team``.
     """
     from playcaller.services.drive_archive import ARCHIVE_KIND_MANUAL, archive_open_drive
-    from playcaller.streamlit_state.keys import LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS, LIVE_FEED_LAST_AUDIT
+    from playcaller.streamlit_state.keys import LIVE_FEED_LAST_AUDIT
 
     blocked = end_drive_blocked_reason(st.session_state.game.possession)
     if blocked:
@@ -101,11 +101,13 @@ def archive_current_drive_and_reset_session(*, end_kind_override: Optional[str] 
     if res.refused:
         st.warning(res.refused)
         return
-    raw = st.session_state.get(LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS)
-    if res.espn_drive_key and isinstance(raw, list):
-        st.session_state[LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS] = [
-            k for k in raw if str(k) != res.espn_drive_key
-        ]
+
+
+def request_undo_drive_archive() -> None:
+    """Widget callback: queue archive undo for the pre-widget pending pass (no ``st.rerun`` here)."""
+    from playcaller.streamlit_state.keys import PENDING_UNDO_DRIVE_ARCHIVE
+
+    st.session_state[PENDING_UNDO_DRIVE_ARCHIVE] = True
 
 
 def request_rerun_after_widgets() -> None:

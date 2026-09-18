@@ -11,6 +11,7 @@ from playcaller.evaluation import evaluate_audit_records, summarize_audit_sessio
 from playcaller.services.game_controller import (
     archive_current_drive_and_reset_session,
     request_rerun_after_widgets,
+    request_undo_drive_archive,
     run_generate_if_requested,
     undo_last_logged_play,
 )
@@ -21,6 +22,7 @@ from playcaller.session_game_metadata import (
 )
 from playcaller.streamlit_state.keys import (
     DEFENSE_LOOK_ORIGIN,
+    DRIVE_ARCHIVE_UNDO_STACK,
     LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_LAST_SYNC_EPOCH,
@@ -148,6 +150,16 @@ def render_main_content(
                 request_rerun_after_widgets()
             if end_block:
                 st.caption(end_block)
+    archive_stack = st.session_state.get(DRIVE_ARCHIVE_UNDO_STACK) or []
+    if archive_stack:
+        if st.button(
+            "Undo last archive",
+            use_container_width=True,
+            key="main_console_undo_drive_archive",
+            help="Restore the last End-drive or auto-closed drive into the live log.",
+        ):
+            request_undo_drive_archive()
+            request_rerun_after_widgets()
     op1, op2, op3 = st.columns([2, 1, 1])
     with op1:
         main_generate = st.button(

@@ -17,6 +17,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_END_DRIVE_UI,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
+    PENDING_UNDO_DRIVE_ARCHIVE,
     PENDING_SCOREBOARD_STATUS,
     PENDING_SESSION_GAME_DATE,
     PENDING_SESSION_GAME_DATE_REPLACE,
@@ -27,6 +28,15 @@ from playcaller.streamlit_state.keys import (
     SESSION_SETUP_TEAM_NAME,
     UNDO_BUNDLE,
 )
+
+
+def apply_pending_undo_drive_archive(ss: MutableMapping[str, Any]) -> None:
+    """Restore the last archived drive before widgets instantiate."""
+    if not ss.pop(PENDING_UNDO_DRIVE_ARCHIVE, False):
+        return
+    from playcaller.services.drive_archive import restore_last_drive_archive
+
+    restore_last_drive_archive(ss)
 
 
 def apply_pending_log_situation(ss: MutableMapping[str, Any]) -> None:
@@ -135,6 +145,7 @@ def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     from playcaller.streamlit_state.load_game import apply_pending_load_game
 
     apply_pending_load_game(ss)
+    apply_pending_undo_drive_archive(ss)
     apply_pending_log_situation(ss)
     apply_pending_end_drive_ui(ss)
     apply_pending_new_game_ui(ss)
