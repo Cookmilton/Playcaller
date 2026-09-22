@@ -48,7 +48,7 @@ An open tail audit row means the operator is mid-snap (Generate without a logged
 
 **Force sync** (live console) and **Sync from ESPN** (sidebar) both call `request_live_sync()` — no new rerun site, no new sync path. They mark origin `feed`. **Force sync** is the prominent console control for “pull now”: it works whether polling is on or off, and it **ignores the polling guards**. That is the point of it.
 
-**Mark manual** is not a third sync. It sets origin `manual` so a later poll cannot clobber operator edits. A poll-initiated `apply_snapshot` is passed `origin=None`; a manual / Force sync still passes `origin="feed"`.
+**Mark manual** is not a third sync. It sets origin `manual` so a later poll cannot clobber operator edits. A poll-initiated sync persists origin `feed` when the board has no origin yet or is already `feed`, and leaves `manual` untouched. A manual / Force sync still always persists origin `feed`.
 
 ### Kill switch
 

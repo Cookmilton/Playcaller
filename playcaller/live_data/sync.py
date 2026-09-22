@@ -127,7 +127,7 @@ def apply_snapshot(
     drive_log: DriveLogger,
     snapshot: NormalizedGameSnapshot,
     options: SyncOptions,
-    origin: Optional[str] = "feed",
+    origin: str = "feed",
 ) -> SyncResult:
     """
     Merge ``snapshot`` into ``game``, Streamlit widget keys on ``session``, and optionally ``drive_log``.
@@ -135,9 +135,10 @@ def apply_snapshot(
     Mutates ``session`` ``game_*`` backend keys (mirrored to ``ui_*`` on the next run before widgets),
     ``game`` fields, ``live_feed_*`` audit keys, and ``live_feed_seen_play_ids``.
 
-    ``origin`` is written to ``LIVE_FEED_LAST_ORIGIN`` when not ``None``. Callers pass
-    ``origin=None`` for a poll-initiated sync so a manual board origin is left intact.
-    The default ``"feed"`` is today's Sync / Force-sync behaviour.
+    ``origin`` is always written to ``LIVE_FEED_LAST_ORIGIN``. Callers resolve it
+    before this call (see ``origin_to_write``): a manual or Force sync passes
+    ``"feed"``; a poll passes ``"feed"`` unless the board is already ``"manual"``,
+    which it passes through. This function does not read the current origin.
     """
     applied: List[str] = []
     # Strings for whole-section skips; ``{"field", "reason"}`` dicts for situation fields.
@@ -502,8 +503,7 @@ def apply_snapshot(
     }
     session[LIVE_FEED_LAST_AUDIT] = audit
     session[LIVE_FEED_LAST_SYNC_EPOCH] = snapshot.fetched_at_epoch
-    if origin is not None:
-        session[LIVE_FEED_LAST_ORIGIN] = origin
+    session[LIVE_FEED_LAST_ORIGIN] = origin
     session[LIVE_FEED_LAST_IS_FINAL] = bool(snapshot.is_final)
 
     trim_snap_review_opens_for_play_count(

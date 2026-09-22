@@ -35,6 +35,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_LAST_POSSESSION_TEAM_ID,
     LIVE_FEED_HTTP_INSECURE_WARNING,
     LIVE_FEED_LAST_SYNC_EPOCH,
+    LIVE_SYNC_INITIATOR,
     LIVE_FEED_TRUSTED_CLOCK,
     LIVE_FEED_MANUAL_AUTO_FETCH,
     LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR,
@@ -222,6 +223,7 @@ def clear_live_feed_session_keys(ss: MutableMapping[str, Any]) -> None:
     ss.pop(LIVE_FEED_LAST_AUDIT, None)
     ss.pop(LIVE_FEED_LAST_ERROR, None)
     ss.pop(LIVE_FEED_LAST_SYNC_EPOCH, None)
+    ss.pop(LIVE_SYNC_INITIATOR, None)
     ss.pop(LIVE_FEED_TRUSTED_CLOCK, None)
     ss.pop(LIVE_FEED_HTTP_INSECURE_WARNING, None)
     ss[LIVE_FEED_MANUAL_EVENT_TEAMS] = None

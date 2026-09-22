@@ -13,6 +13,7 @@ from playcaller.state import DriveLogger
 from playcaller.streamlit_state.keys import (
     LIVE_FEED_HTTP_INSECURE_WARNING,
     LIVE_FEED_LAST_ERROR,
+    LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_MANUAL_EVENT_FETCH_ERROR,
     LIVE_FEED_MANUAL_EVENT_FOR_ID,
     LIVE_FEED_MANUAL_EVENT_TEAMS,
@@ -23,7 +24,7 @@ from playcaller.streamlit_state.keys import (
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
 )
-from playcaller.streamlit_state.possession import ORIGIN_FEED
+from playcaller.streamlit_state.possession import ORIGIN_FEED, ORIGIN_MANUAL
 
 _POLL_INITIATOR = "poll"
 logger = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ def request_live_sync(*, initiator: str = "manual") -> None:
     """Widget ``on_click``: queue a feed sync for the start of this script run (no ``st.rerun``).
 
     The default ``initiator="manual"`` writes only ``LIVE_SYNC_REQUESTED`` (today's Sync
-    button). A poll passes ``initiator="poll"`` so ``apply_snapshot`` is told not to
-    overwrite ``LIVE_FEED_LAST_ORIGIN``.
+    button and Force sync). A poll passes ``initiator="poll"`` so
+    :func:`origin_to_write` can persist ``"feed"`` without overriding a manual board.
     """
     import streamlit as st
 
@@ -43,13 +44,17 @@ def request_live_sync(*, initiator: str = "manual") -> None:
         st.session_state[LIVE_SYNC_INITIATOR] = initiator
 
 
-def origin_for_sync_initiator(initiator: Optional[str]) -> Optional[str]:
-    """Map the queued initiator to the ``origin=`` passed into ``apply_snapshot``.
+def origin_to_write(*, initiator: Optional[str], current_origin: Optional[str]) -> str:
+    """Origin value ``apply_snapshot`` should persist on ``LIVE_FEED_LAST_ORIGIN``.
 
-    Manual / unset → ``"feed"`` (today's behaviour). Poll → ``None`` (leave origin).
+    A manual or Force sync (initiator unset or ``"manual"``) always writes ``"feed"``.
+    A poll writes ``"feed"`` when the board has no origin yet or is already ``"feed"``,
+    and passes ``"manual"`` through when the board is already manual so that write
+    leaves the operator's choice in place. The poll intent is this function — not
+    ``origin=None``.
     """
-    if initiator == _POLL_INITIATOR:
-        return None
+    if initiator == _POLL_INITIATOR and current_origin == ORIGIN_MANUAL:
+        return ORIGIN_MANUAL
     return ORIGIN_FEED
 
 
@@ -153,7 +158,10 @@ def _run_live_sync_body(ss: MutableMapping[str, Any]) -> Optional[str]:
         drive_log=drive_log,
         snapshot=fr.snapshot,
         options=sync_options_from_session(ss),
-        origin=origin_for_sync_initiator(ss.get(LIVE_SYNC_INITIATOR)),
+        origin=origin_to_write(
+            initiator=ss.get(LIVE_SYNC_INITIATOR),
+            current_origin=ss.get(LIVE_FEED_LAST_ORIGIN),
+        ),
     )
     extra: list[str] = []
     if fr.raw_summary:

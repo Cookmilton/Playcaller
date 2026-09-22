@@ -51,7 +51,8 @@ LOAD_GAME_ERROR = "load_game_error"
 # Sync button / polling: fetch+apply at the top of the script, then hydrate.
 LIVE_SYNC_REQUESTED = "live_sync_requested"
 # Who queued ``LIVE_SYNC_REQUESTED``: ``"manual"`` (default / unset) or ``"poll"``.
-# Threaded through ``apply_snapshot(origin=...)`` so a poll cannot clobber manual origin.
+# ``origin_to_write`` turns this plus the current origin into the value ``apply_snapshot``
+# persists: a poll writes ``"feed"`` unless the board is already ``"manual"``.
 LIVE_SYNC_INITIATOR = "live_sync_initiator"
 LIVE_SYNC_TOAST = "live_sync_toast"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
