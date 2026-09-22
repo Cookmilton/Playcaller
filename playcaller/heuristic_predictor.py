@@ -609,6 +609,23 @@ class HeuristicPredictor(Predictor):
     # ── Situation bucket / game mode ───────────────────────────────────────────
 
     def get_bucket(self, ctx: GameContext) -> str:
+        """Situation bucket used to pick baseline family scores.
+
+        Field position decides first, then down **and** distance:
+
+        - ``red_zone``       — opponents' 20 or closer
+        - ``backed_up``      — own 10 or closer
+        - ``short_yardage``  — distance <= 2
+        - ``medium_yardage`` — distance 3-6, **or 1st down with distance <= 10**
+        - ``long_yardage``   — distance >= 7 on 2nd/3rd/4th down, and 1st & 11+
+
+        F4.1: distance alone used to decide the last two, so any ``distance >= 7``
+        was ``long_yardage`` — including 1st & 10, the most common snap in
+        football, which then scored against behind-schedule pass-heavy baselines.
+        A first down with 10 or fewer to go is *on schedule*; only a first down
+        pushed past 10 (a penalty) is genuinely long. Later downs are unchanged:
+        2nd & 10 and 3rd & 10 are still ``long_yardage``.
+        """
         if ctx.territory == "opponents" and ctx.yardline <= 20:
             return "red_zone"
         if ctx.territory == "own" and ctx.yardline <= 10:
@@ -616,6 +633,8 @@ class HeuristicPredictor(Predictor):
         if ctx.distance <= 2:
             return "short_yardage"
         if 3 <= ctx.distance <= 6:
+            return "medium_yardage"
+        if ctx.down == 1 and ctx.distance <= 10:
             return "medium_yardage"
         return "long_yardage"
 
