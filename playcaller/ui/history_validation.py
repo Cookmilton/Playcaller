@@ -10,6 +10,8 @@ from typing import Any, List, Mapping, Optional
 
 import streamlit as st
 
+from playcaller.actual_result import family_display_label
+
 from playcaller.history import (
     HistoryCorpus,
     IngestReport,
@@ -693,7 +695,7 @@ def _render_match_tab(
                     "down": m.down,
                     "dist_bucket": m.distance_bucket,
                     "zone": m.field_zone,
-                    "actual_family": m.actual.family,
+                    "actual_family": family_display_label(m.actual.family),
                     "yards": m.actual.yards_gained,
                     "play_success_raw": m.play_success,
                     "success_display": _success_cell(m.play_success, derived),

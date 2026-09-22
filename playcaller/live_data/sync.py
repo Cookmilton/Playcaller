@@ -60,7 +60,7 @@ from playcaller.streamlit_state.widget_backend_bridge import (
     request_widget_hydrate_from_backend,
 )
 
-from ..domain import ActualPlayResult
+from ..domain import CALL_SOURCE_FEED, ActualPlayResult
 from ..evaluation.snap_review_lifecycle import (
     close_snap_review_row_with_logged_actual,
     trim_snap_review_opens_for_play_count,
@@ -425,6 +425,7 @@ def apply_snapshot(
                     family=fam,
                     concept_name="Feed",
                     play_type=pt,
+                    call_source=CALL_SOURCE_FEED,
                     result_type=rt,
                     yards_gained=int(ev.yards_gained or 0),
                     description=f"[Feed] {ev.summary_text[:220]}",

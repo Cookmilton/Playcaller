@@ -118,7 +118,29 @@ def test_classify_incomplete() -> None:
     )
 
 
-def test_assemble_auto_pass_complete_positive() -> None:
+def test_assemble_auto_pass_complete_positive_when_call_confirmed() -> None:
+    """K1.2: ``Auto`` may read the family only when the operator confirmed the call."""
+    play = PLAY_LIBRARY["quick_game"][0]
+    a = assemble_actual_semantics(
+        concept_name="x",
+        family="quick_game",
+        play=play,
+        yards_gained=8,
+        target_choice="Z",
+        outcome_ui="Auto (from call + yards)",
+        sack_from_chip=False,
+        call_source="operator_confirmed",
+    )
+    assert a.play_type == "pass"
+    assert a.pass_result == "complete"
+    assert a.target_position == "Z"
+    assert a.family == "quick_game"
+    assert a.concept_name == "x"
+
+
+def test_assemble_auto_unobserved_does_not_guess_play_type() -> None:
+    """Without a confirmation, yards alone do not say run or pass — and the
+    recommendation's family/concept must not be copied onto the logged play."""
     play = PLAY_LIBRARY["quick_game"][0]
     a = assemble_actual_semantics(
         concept_name="x",
@@ -129,9 +151,11 @@ def test_assemble_auto_pass_complete_positive() -> None:
         outcome_ui="Auto (from call + yards)",
         sack_from_chip=False,
     )
-    assert a.play_type == "pass"
-    assert a.pass_result == "complete"
-    assert a.target_position == "Z"
+    assert a.call_source == "unobserved"
+    assert a.family is None
+    assert a.concept_name is None
+    assert a.play_type is None
+    assert a.pass_result == ""
 
 
 def test_custom_description_short_circuit() -> None:

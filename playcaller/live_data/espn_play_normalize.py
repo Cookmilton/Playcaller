@@ -11,7 +11,7 @@ import re
 from dataclasses import replace
 from typing import Any, Dict, Optional, Tuple
 
-from playcaller.domain import ActualPlayResult, PASS_FAMILIES, RUN_FAMILIES
+from playcaller.domain import CALL_SOURCE_FEED, ActualPlayResult, PASS_FAMILIES, RUN_FAMILIES
 from playcaller.situation import territory_yardline_from_abs_yards
 
 from .espn_play_participants import enrich_espn_actual_with_participants
@@ -663,7 +663,9 @@ def espn_play_to_actual(play: Dict[str, Any]) -> Optional[ActualPlayResult]:
         return None
     ap = apply_espn_feed_presnap_fields(ap, play)
     ap = enrich_espn_actual_with_participants(ap, play)
-    return apply_espn_feed_presnap_fields(ap, play)
+    ap = apply_espn_feed_presnap_fields(ap, play)
+    # K1.2: single choke point for feed provenance — every ESPN-derived row is "feed".
+    return replace(ap, call_source=CALL_SOURCE_FEED)
 
 
 def validate_actual_for_engine(a: ActualPlayResult) -> ActualPlayResult:

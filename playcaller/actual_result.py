@@ -11,8 +11,10 @@ from dataclasses import asdict, replace
 from typing import Optional, Tuple
 
 from .domain import (
+    CALL_SOURCE_UNOBSERVED,
     PASS_FAMILIES,
     RUN_FAMILIES,
+    TRUSTED_CALL_SOURCES,
     ActualPlayResult,
     ball_carrier_and_target_from_play,
     play_type_for_family,
@@ -341,11 +343,14 @@ def format_actual_play_analysis_detail(a: ActualPlayResult) -> str:
     """Secondary line: concept/family tags and situation markers (may be empty)."""
     parts: list[str] = []
     fam = (a.family or "").strip()
+    cn = (a.concept_name or "").strip()
     if fam:
         parts.append(fam.replace("_", " "))
-    cn = (a.concept_name or "").strip()
     if cn:
         parts.append(f"“{cn}”")
+    if not fam and not cn:
+        # K1.2: say so, rather than silently omitting the call from the line.
+        parts.append(NOT_RECORDED_LABEL)
     pt = (a.play_type or "").strip()
     if pt and pt not in (x.lower() for x in parts):
         parts.append(pt)
@@ -375,6 +380,29 @@ def format_actual_play_analysis_detail(a: ActualPlayResult) -> str:
     if markers:
         bits.append(" · ".join(markers))
     return " · ".join(bits) if bits else ""
+
+
+#: Shown wherever a logged play's family / concept was never recorded (K1.2). An
+#: explicit state — never blank text, and never a colour that reads as a real family.
+NOT_RECORDED_LABEL = "call not recorded"
+#: Amber-grey, deliberately outside ``FAM_COLOR``'s run-green / pass-blue palette.
+NOT_RECORDED_COLOR = "#78716c"
+
+
+def family_display_label(family: Optional[str]) -> str:
+    """Family for display, or an explicit "not recorded" when the call is unobserved."""
+    fam = (family or "").strip()
+    if not fam:
+        return NOT_RECORDED_LABEL
+    return fam.replace("_", " ")
+
+
+def family_display_color(family: Optional[str], palette: dict) -> str:
+    """Colour for ``family``; unobserved calls get their own colour, not a palette default."""
+    fam = (family or "").strip()
+    if not fam:
+        return NOT_RECORDED_COLOR
+    return palette.get(fam, NOT_RECORDED_COLOR)
 
 
 def role_label_from_position(pos: Optional[str]) -> str:
@@ -434,17 +462,21 @@ def carrier_and_position_from_target_choice(
 
 def resolve_logging_semantics(
     *,
-    family: str,
+    family: Optional[str],
     yards_gained: int,
     outcome_ui: str,
     sack_from_chip: bool,
-) -> tuple[str, str, bool, bool, bool, str, str]:
+) -> tuple[Optional[str], str, bool, bool, bool, str, str]:
     """
     Derive (play_type, pass_result, sack, scramble, turnover, turnover_kind, result_type_preset)
     from UI. ``result_type_preset`` is ``field_goal``, ``field_goal_miss``, or ``""``.
+
+    K1.2: ``play_type`` comes from ``outcome_ui``. ``family`` is only consulted when the
+    operator confirmed the call — on ``Auto`` with no family the play type is ``None``
+    ("not recorded") rather than a guess inherited from the recommendation.
     """
     y = int(yards_gained)
-    base_pt = play_type_for_family(family)
+    base_pt = play_type_for_family(family) if family else None
     auto = (outcome_ui or "").startswith("Auto")
 
     if not auto:
@@ -465,7 +497,12 @@ def resolve_logging_semantics(
         if outcome_ui == "Field goal missed":
             return "field_goal", "", False, False, False, "", "field_goal_miss"
 
-    if sack_from_chip or (base_pt == "pass" and y <= -4):
+    if sack_from_chip:
+        return "pass", "sack", True, False, False, "", ""
+    if base_pt is None:
+        # Auto with no confirmed call: yards alone do not say run or pass.
+        return None, "", False, False, False, "", ""
+    if base_pt == "pass" and y <= -4:
         return "pass", "sack", True, False, False, "", ""
     if base_pt == "run":
         return "run", "", False, False, False, "", ""
@@ -478,8 +515,8 @@ def resolve_logging_semantics(
 
 def assemble_actual_semantics(
     *,
-    concept_name: str,
-    family: str,
+    concept_name: Optional[str],
+    family: Optional[str],
     play: dict,
     yards_gained: int,
     target_choice: str,
@@ -487,8 +524,17 @@ def assemble_actual_semantics(
     sack_from_chip: bool,
     forced_interception: bool = False,
     forced_incomplete: bool = False,
+    call_source: str = CALL_SOURCE_UNOBSERVED,
 ) -> ActualPlayResult:
-    """Build semantic ``ActualPlayResult`` before down/distance advance (yards/flags only)."""
+    """Build semantic ``ActualPlayResult`` before down/distance advance (yards/flags only).
+
+    K1.2: ``family`` / ``concept_name`` are only kept when ``call_source`` says the
+    operator confirmed the call was run. Otherwise they stay ``None`` — the logged play
+    must not inherit the *recommendation's* identity just because it was on screen.
+    """
+    if call_source not in TRUSTED_CALL_SOURCES:
+        family = None
+        concept_name = None
     oc = outcome_ui
     if forced_interception:
         oc = "Interception"
@@ -526,6 +572,7 @@ def assemble_actual_semantics(
         concept_name=concept_name,
         family=family,
         play_type=pt,
+        call_source=call_source,
         pass_result=pr,
         result_type=preset_rt or "",
         yards_gained=yds,

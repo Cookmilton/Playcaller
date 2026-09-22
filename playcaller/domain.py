@@ -14,6 +14,26 @@ PASS_FAMILIES = {"quick_game", "dropback_pass", "screen", "play_action", "fade_i
 # opponents' 35 ≈ 52-yard attempt — makeable for most kickers
 FG_RANGE_YARDLINE = 35
 
+# ── Provenance of a logged play's family / concept (K1.2) ─────────────────────
+#: The operator ticked "Ran the recommended call": family/concept are the call's.
+CALL_SOURCE_OPERATOR_CONFIRMED = "operator_confirmed"
+#: Nobody recorded which call was run: family/concept are ``None``.
+CALL_SOURCE_UNOBSERVED = "unobserved"
+#: Derived from an ESPN feed row.
+CALL_SOURCE_FEED = "feed"
+
+#: Only these rows may be counted in family-match metrics. A missing ``call_source``
+#: (legacy export) is untrusted and is excluded, exactly like J3's ``time_source``.
+TRUSTED_CALL_SOURCES = frozenset({CALL_SOURCE_OPERATOR_CONFIRMED})
+
+
+def call_is_observed(actual: "ActualPlayResult") -> bool:
+    """Whether this row's ``family`` / ``concept_name`` reflect the call actually run."""
+    return (
+        getattr(actual, "call_source", None) in TRUSTED_CALL_SOURCES
+        and bool(getattr(actual, "family", None))
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DATA STRUCTURES
@@ -72,9 +92,16 @@ class ActualPlayResult:
     Use ``format_actual_play_result_description`` for a one-line summary from these fields.
     """
 
-    concept_name: str = ""
-    family: str = ""
-    play_type: str = ""  # run | pass | qb_scramble | two_point | …
+    # K1.2: ``None`` means "not recorded", not "empty". The operator Log path used to
+    # copy the *recommendation's* family/concept onto the logged play, so every logged
+    # row claimed the call that was suggested — even a field goal. Only an operator
+    # confirmation (``call_source == "operator_confirmed"``) may fill these now.
+    concept_name: Optional[str] = None
+    family: Optional[str] = None
+    play_type: Optional[str] = None  # run | pass | qb_scramble | two_point | …
+    #: Provenance of ``family`` / ``concept_name`` — see ``CALL_SOURCE_*`` below.
+    #: Absent in legacy exports, which means untrusted (same rule as J3 ``time_source``).
+    call_source: Optional[str] = None
     result_type: str = ""  # first_down | interception | incomplete | sack | …
     yards_gained: int = 0
     ball_carrier_or_target: str = ""
@@ -129,7 +156,11 @@ class ActualPlayResult:
 PlayResult = ActualPlayResult
 
 
-def play_type_for_family(family: str) -> str:
+def play_type_for_family(family: Optional[str]) -> str:
+    # K1.2: ``None`` family means the call was never recorded — never stringify it to
+    # the literal "None", which would read as a play type downstream.
+    if not family:
+        return ""
     f = str(family)
     if f in RUN_FAMILIES:
         return "run"

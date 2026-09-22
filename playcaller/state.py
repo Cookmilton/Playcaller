@@ -37,16 +37,21 @@ class DriveLogger:
         out: Dict[str, float] = {}
         recent = self.results[-max_plays:]
         for i, r in enumerate(reversed(recent)):
+            if not r.family:
+                continue
             w = math.exp(decay * i)
             out[r.family] = out.get(r.family, 0.0) + w
         self._metrics_weighted = out
         tail = self.results[-6:]
-        self._metrics_recent6 = [r.family for r in tail]
+        self._metrics_recent6 = [r.family for r in tail if r.family]
         self._metrics_len = n
 
     def log(self, result: ActualPlayResult) -> None:
         self.results.append(result)
-        self.family_counts[result.family] = self.family_counts.get(result.family, 0) + 1
+        # K1.2: a play whose call was never recorded has ``family is None``. It is not a
+        # family named "None" — it is absent from tendency counts entirely.
+        if result.family:
+            self.family_counts[result.family] = self.family_counts.get(result.family, 0) + 1
         self._invalidate_drive_metrics()
 
     def pop_last(self) -> Optional[ActualPlayResult]:
@@ -55,11 +60,12 @@ class DriveLogger:
             return None
         r = self.results.pop()
         fam = r.family
-        prev = self.family_counts.get(fam, 1) - 1
-        if prev <= 0:
-            self.family_counts.pop(fam, None)
-        else:
-            self.family_counts[fam] = prev
+        if fam:
+            prev = self.family_counts.get(fam, 1) - 1
+            if prev <= 0:
+                self.family_counts.pop(fam, None)
+            else:
+                self.family_counts[fam] = prev
         self._invalidate_drive_metrics()
         return r
 
@@ -71,8 +77,9 @@ class DriveLogger:
         return None
 
     def run_pass_split(self) -> Tuple[int, int]:
+        """Runs / passes among plays whose call is known — unobserved plays are neither."""
         runs = sum(1 for r in self.results if r.family in RUN_FAMILIES)
-        passes = len(self.results) - runs
+        passes = sum(1 for r in self.results if r.family and r.family not in RUN_FAMILIES)
         return runs, passes
 
     def run_count(self) -> int:

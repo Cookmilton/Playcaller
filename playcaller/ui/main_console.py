@@ -7,6 +7,7 @@ import html
 import streamlit as st
 
 from playcaller import FootballPlayPredictor, Game, GameContext, DriveLogger, format_actual_play_result_description
+from playcaller.actual_result import family_display_color
 from playcaller.evaluation import evaluate_audit_records, summarize_audit_session
 from playcaller.services.game_controller import (
     archive_current_drive_and_reset_session,
@@ -313,8 +314,8 @@ def render_main_content(
             for r in drive_log.results:
                 d = r.description or format_actual_play_result_description(r)
                 chip_spans.append(
-                    f'<span style="padding:2px 8px;border-radius:3px;background:{FAM_COLOR.get(r.family,"#6b7280")}22;'
-                    f'border:1px solid {FAM_COLOR.get(r.family,"#6b7280")}55;color:{FAM_COLOR.get(r.family,"#9ca3af")};font-size:11px">'
+                    f'<span style="padding:2px 8px;border-radius:3px;background:{family_display_color(r.family, FAM_COLOR)}22;'
+                    f'border:1px solid {family_display_color(r.family, FAM_COLOR)}55;color:{family_display_color(r.family, FAM_COLOR)};font-size:11px">'
                     f'{html.escape(d[:48])}{"…" if len(d) > 48 else ""}</span>'
                 )
             chips = " ".join(chip_spans)

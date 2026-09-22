@@ -14,6 +14,7 @@ from playcaller import (
     GameContext,
     format_actual_play_result_description,
 )
+from playcaller.actual_result import family_display_color
 from playcaller.situation import (
     change_of_possession_copy,
     yards_from_own_goal,
@@ -88,7 +89,7 @@ def render_current_series_live(drive_log: DriveLogger) -> None:
         start_i = len(drive_log.results) - len(tail) + 1
         for i, r in enumerate(tail, start=start_i):
             line = (r.description or "").strip() or format_actual_play_result_description(r)
-            fc = FAM_COLOR.get(r.family, "#6b7280")
+            fc = family_display_color(r.family, FAM_COLOR)
             st.markdown(
                 f'<div style="border-left:3px solid {fc};padding:5px 0 5px 10px;margin:5px 0;'
                 f'font-size:13px;line-height:1.4;color:#e2e8f0">'

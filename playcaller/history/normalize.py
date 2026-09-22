@@ -59,9 +59,16 @@ def linked_actual_matches_play(linked: Mapping[str, Any], play: ActualPlayResult
             if bool(lv) != bool(pv):
                 return False
         else:
-            if str(lv or "") != str(pv or ""):
+            # K1.2: carry ``None`` through — "not recorded" is not the same value as an
+            # empty string, so a legacy row and an unobserved row must not match on it.
+            if _optional_str(lv) != _optional_str(pv):
                 return False
     return True
+
+
+def _optional_str(v: Any) -> Optional[str]:
+    """``None`` stays ``None``; everything else becomes its string form."""
+    return None if v is None else str(v)
 
 
 def derive_yardline_100(*, territory: Optional[str], yardline: Optional[int]) -> Optional[int]:

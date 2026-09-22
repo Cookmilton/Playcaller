@@ -21,6 +21,7 @@ from playcaller import (
     format_actual_play_result_description,
     invoke_post_play_hook,
 )
+from playcaller.domain import CALL_SOURCE_UNOBSERVED
 from playcaller.evaluation.snap_review_lifecycle import close_snap_review_row_with_logged_actual
 from playcaller.evaluation.snap_review_logging import merge_streamlit_snap_review_debug
 from playcaller.game_situation_input import format_ball_spot, format_clock_left_in_quarter
@@ -494,10 +495,15 @@ def render_recommendation_panel(
                 else:
                     outcome_ui = str(st.session_state.get("main_log_semantic_outcome", LOG_OUTCOME_AUTO))
                 target_choice = str(st.session_state.get("main_log_semantic_target", LOG_TARGET_AUTO))
+                # K1.2: the logged play does NOT inherit the recommendation's identity.
+                # ``assemble_actual_semantics`` keeps family/concept only for a
+                # confirmed call; an unobserved log records ``None``.
+                call_source = CALL_SOURCE_UNOBSERVED
                 sem = assemble_actual_semantics(
                     concept_name=play.get("name", ""),
                     family=family,
                     play=play,
+                    call_source=call_source,
                     yards_gained=int(yards),
                     target_choice=target_choice,
                     outcome_ui=outcome_ui,

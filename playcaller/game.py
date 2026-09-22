@@ -461,9 +461,11 @@ def classify_drive_end(
             detail_line=detail,
         )
 
-    if rt == "field_goal" or (
-        "field goal" in (last.concept_name or "").lower() and "miss" not in (last.concept_name or "").lower()
-    ):
+    # K1.2: decided by ``result_type`` alone. This used to also fire when
+    # ``concept_name`` merely contained "field goal" — and concept_name was copied from
+    # the *recommendation*, so a suggested play whose name mentioned a field goal could
+    # archive a drive as a made field goal. Concept names are no longer evidence.
+    if rt == "field_goal":
         return DriveResult(kind=DRIVE_END_FIELD_GOAL, headline="Field goal", detail_line=detail)
 
     if rt == "punt" or "punt" in (last.description or "").lower():

@@ -255,6 +255,8 @@ def actual_result_summary(actual: ActualPlayResult) -> Dict[str, Any]:
         "play_type": actual.play_type,
         "family": actual.family,
         "concept_name": actual.concept_name,
+        # K1.2: provenance travels with family/concept. Absent (legacy export) = untrusted.
+        "call_source": actual.call_source,
         "yards_gained": int(actual.yards_gained),
         "result_type": actual.result_type or "",
         "touchdown": bool(actual.touchdown),
