@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from playcaller.domain import ActualPlayResult, GameContext
+from playcaller.domain import CALL_SOURCE_OPERATOR_CONFIRMED, ActualPlayResult, GameContext
 from playcaller.engine import FootballPlayPredictor
 from playcaller.evaluation import (
     append_open_audit,
@@ -58,6 +58,8 @@ def test_audit_link_and_metrics() -> None:
         play_type="pass",
         yards_gained=8,
         result_type="first_down",
+        # K1.3: only a confirmed call is scored for family match.
+        call_source=CALL_SOURCE_OPERATOR_CONFIRMED,
     )
     dl.log(actual)
     assert link_open_audit_to_actual(audit, plays_after_log=len(dl.results), actual=actual) is not None
@@ -105,7 +107,11 @@ def test_evaluate_audit_records_ignores_superseded() -> None:
         {
             "status": "closed",
             "selected_family": "quick_game",
-            "linked_actual": {"family": "quick_game"},
+            # K1.3: family match is scored only for a confirmed call.
+            "linked_actual": {
+                "family": "quick_game",
+                "call_source": CALL_SOURCE_OPERATOR_CONFIRMED,
+            },
         },
     ]
     ev = evaluate_audit_records(rows)
@@ -221,6 +227,8 @@ def test_export_after_generate_and_log_is_review_timeline_ready() -> None:
         play_type="pass",
         yards_gained=8,
         result_type="first_down",
+        # K1.3: only a confirmed call is scored for family match.
+        call_source=CALL_SOURCE_OPERATOR_CONFIRMED,
     )
     dl.log(actual)
     assert link_open_audit_to_actual(

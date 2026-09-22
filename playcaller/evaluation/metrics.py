@@ -4,7 +4,7 @@ import math
 from collections import Counter
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from ..domain import PASS_FAMILIES, RUN_FAMILIES
+from ..domain import PASS_FAMILIES, RUN_FAMILIES, TRUSTED_CALL_SOURCES
 from ..session_game_metadata import audit_context_from_game_metadata, format_audit_session_context_line
 from .audit import aggressiveness_label, situation_bucket
 
@@ -45,8 +45,16 @@ def actual_fields_is_explosive(actual: Mapping[str, Any]) -> bool:
 
 
 def _family_match(rec: Mapping[str, Any]) -> Optional[bool]:
+    """``True``/``False`` only for a call the operator confirmed was run; else ``None``.
+
+    K1.3: an unobserved row's family is absent, and a feed row's family is a text-parse
+    normalization — neither is evidence of the call. ``None`` excludes the row from the
+    rate entirely; it is never counted as a mismatch.
+    """
     act = rec.get("linked_actual")
     if not isinstance(act, dict):
+        return None
+    if act.get("call_source") not in TRUSTED_CALL_SOURCES:
         return None
     af = str(act.get("family", "") or "")
     sf = str(rec.get("selected_family", "") or "")
@@ -77,6 +85,10 @@ def evaluate_audit_records(records: Sequence[Mapping[str, Any]]) -> Dict[str, An
     n_closed = len(closed)
     matches = sum(1 for r in closed if _family_match(r) is True)
     mismatches = sum(1 for r in closed if _family_match(r) is False)
+    # K1.3: only confirmed calls are scored, so the rate's denominator is the scored
+    # rows — not every closed row. Dividing by ``n_closed`` would report a low match
+    # rate that is really just unobserved rows.
+    n_scored = matches + mismatches
 
     # Diversity: Shannon entropy of selected families (all recommendations)
     total_r = sum(reco_families.values()) or 1
@@ -172,7 +184,10 @@ def evaluate_audit_records(records: Sequence[Mapping[str, Any]]) -> Dict[str, An
         "n_open_unlogged": len(open_only),
         "family_match_count": matches,
         "family_mismatch_count": mismatches,
-        "family_match_rate": round(matches / n_closed, 3) if n_closed else None,
+        # Closed rows whose call the operator confirmed — the only ones scored below.
+        "n_family_match_scored": n_scored,
+        "n_family_match_unobserved": n_closed - n_scored,
+        "family_match_rate": round(matches / n_scored, 3) if n_scored else None,
         "reco_family_entropy_bits": round(entropy, 3),
         "reco_family_counts": dict(reco_families),
         "explosive_rate_by_recommended_family": expl_rates,

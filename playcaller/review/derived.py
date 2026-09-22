@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from playcaller.actual_result import format_actual_play_result_description
-from playcaller.domain import ActualPlayResult, FG_RANGE_YARDLINE
+from playcaller.domain import TRUSTED_CALL_SOURCES, ActualPlayResult, FG_RANGE_YARDLINE
 from playcaller.play_event_segment import PlayEventSegment
 from playcaller.evaluation.audit import situation_bucket
 from playcaller.evaluation.metrics import (
@@ -252,8 +252,11 @@ def _snapshot_flags(
 
 
 def _family_match_row(row: Mapping[str, Any]) -> Optional[bool]:
+    """See :func:`playcaller.evaluation.metrics._family_match` — confirmed calls only."""
     act = row.get("linked_actual")
     if not isinstance(act, dict):
+        return None
+    if act.get("call_source") not in TRUSTED_CALL_SOURCES:
         return None
     af = str(act.get("family", "") or "")
     sf = str(row.get("selected_family", "") or "")

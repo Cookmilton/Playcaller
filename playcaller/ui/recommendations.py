@@ -21,12 +21,14 @@ from playcaller import (
     format_actual_play_result_description,
     invoke_post_play_hook,
 )
-from playcaller.domain import CALL_SOURCE_UNOBSERVED
+from playcaller.domain import CALL_SOURCE_OPERATOR_CONFIRMED, CALL_SOURCE_UNOBSERVED
 from playcaller.evaluation.snap_review_lifecycle import close_snap_review_row_with_logged_actual
 from playcaller.evaluation.snap_review_logging import merge_streamlit_snap_review_debug
 from playcaller.game_situation_input import format_ball_spot, format_clock_left_in_quarter
 from playcaller.streamlit_state.keys import (
     LAST_DRIVE_SNAP_CONTEXT,
+    LOG_CALL_CONFIRMED,
+    PENDING_LOG_CALL_CONFIRMED,
     PENDING_LOG_SITUATION,
     UNDO_BUNDLE,
     WAREHOUSE_HISTORICAL_SIGNAL,
@@ -456,6 +458,18 @@ def render_recommendation_panel(
                 st.caption(stale_reason)
             log_disabled = bool(log_block) or bool(stale_reason)
 
+            # K1.3: the only operator input that may attach this call to the logged play.
+            # Unchecked (the default) logs the result with no family/concept at all.
+            st.checkbox(
+                "Ran the recommended call",
+                value=False,
+                key=LOG_CALL_CONFIRMED,
+                help=(
+                    "Tick only if the offense actually ran this concept. Left unticked, the "
+                    "play is logged without a family or concept — the call is not recorded."
+                ),
+            )
+
             with st.expander("Advanced: outcome dropdown & primary target", expanded=False):
                 st.selectbox("What happened?", LOG_OUTCOME_OPTIONS, index=0, key="main_log_semantic_outcome")
                 st.selectbox("Primary / target", LOG_TARGET_OPTIONS, index=0, key="main_log_semantic_target")
@@ -495,10 +509,14 @@ def render_recommendation_panel(
                 else:
                     outcome_ui = str(st.session_state.get("main_log_semantic_outcome", LOG_OUTCOME_AUTO))
                 target_choice = str(st.session_state.get("main_log_semantic_target", LOG_TARGET_AUTO))
-                # K1.2: the logged play does NOT inherit the recommendation's identity.
-                # ``assemble_actual_semantics`` keeps family/concept only for a
-                # confirmed call; an unobserved log records ``None``.
-                call_source = CALL_SOURCE_UNOBSERVED
+                # K1.2/K1.3: the logged play does NOT inherit the recommendation's
+                # identity unless the operator confirmed this call was run.
+                # ``assemble_actual_semantics`` drops family/concept otherwise.
+                call_source = (
+                    CALL_SOURCE_OPERATOR_CONFIRMED
+                    if bool(st.session_state.get(LOG_CALL_CONFIRMED, False))
+                    else CALL_SOURCE_UNOBSERVED
+                )
                 sem = assemble_actual_semantics(
                     concept_name=play.get("name", ""),
                     family=family,
@@ -587,6 +605,7 @@ def render_recommendation_panel(
                     assign_session_state(
                         st.session_state, "ui_auto_generate", True, context="quick_log_play"
                     )
+                st.session_state[PENDING_LOG_CALL_CONFIRMED] = False
                 st.session_state.result = None
                 st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
                 invoke_post_play_hook(

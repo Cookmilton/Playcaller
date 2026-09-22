@@ -28,6 +28,10 @@ UI_DRIVE_AUDIT_FOCUS_CHRON = "ui_drive_audit_focus_chron"
 
 # --- Pending buffers (apply before widgets render; see ``streamlit_state.pending``) ---
 PENDING_LOG_SITUATION = "pending_log_situation"
+# K1.3 "Ran the recommended call" checkbox (main console, read only at Log time).
+LOG_CALL_CONFIRMED = "main_log_call_confirmed"
+# Seed/reset for that checkbox, applied before it renders — never written after render.
+PENDING_LOG_CALL_CONFIRMED = "pending_log_call_confirmed"
 PENDING_END_DRIVE_UI = "pending_end_drive_ui"
 PENDING_NEW_GAME_UI = "pending_new_game_ui"
 # Queue ``hydrate_session_setup_widgets`` for the next run (before those widgets instantiate).

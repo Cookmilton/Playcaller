@@ -265,9 +265,10 @@ def test_k12_family_match_excludes_unobserved_rows() -> None:
     from playcaller.evaluation.metrics import _family_match
     from playcaller.review.derived import _family_match_row
 
-    unobserved = {"selected_family": "power", "linked_actual": {"family": None}}
-    matched = {"selected_family": "power", "linked_actual": {"family": "power"}}
-    mismatched = {"selected_family": "power", "linked_actual": {"family": "screen"}}
+    confirmed = {"call_source": CALL_SOURCE_OPERATOR_CONFIRMED}
+    unobserved = {"selected_family": "power", "linked_actual": {"family": None, **confirmed}}
+    matched = {"selected_family": "power", "linked_actual": {"family": "power", **confirmed}}
+    mismatched = {"selected_family": "power", "linked_actual": {"family": "screen", **confirmed}}
     for fn in (_family_match, _family_match_row):
         assert fn(unobserved) is None, fn
         assert fn(matched) is True, fn

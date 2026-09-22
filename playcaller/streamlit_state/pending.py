@@ -13,8 +13,10 @@ from typing import Any, MutableMapping
 
 from playcaller.streamlit_state.keys import (
     LAST_DRIVE_SNAP_CONTEXT,
+    LOG_CALL_CONFIRMED,
     LIVE_FEED_SCOREBOARD_ROWS,
     PENDING_END_DRIVE_UI,
+    PENDING_LOG_CALL_CONFIRMED,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
     PENDING_UNDO_DRIVE_ARCHIVE,
@@ -48,6 +50,17 @@ def apply_pending_log_situation(ss: MutableMapping[str, Any]) -> None:
     ss["ui_yardline"] = int(pending["yardline"])
     ss["ui_down"] = int(pending["down"])
     ss["ui_distance"] = int(pending["distance"])
+
+
+def apply_pending_log_call_confirmed(ss: MutableMapping[str, Any]) -> None:
+    """Seed/reset the K1.3 "Ran the recommended call" checkbox before it renders.
+
+    The Log handler queues the reset here rather than assigning the widget key after
+    render, which Streamlit forbids for a widget already drawn this run.
+    """
+    if PENDING_LOG_CALL_CONFIRMED not in ss:
+        return
+    ss[LOG_CALL_CONFIRMED] = bool(ss.pop(PENDING_LOG_CALL_CONFIRMED))
 
 
 def apply_pending_end_drive_ui(ss: MutableMapping[str, Any]) -> None:
@@ -147,6 +160,7 @@ def apply_all_pending(ss: MutableMapping[str, Any]) -> None:
     apply_pending_load_game(ss)
     apply_pending_undo_drive_archive(ss)
     apply_pending_log_situation(ss)
+    apply_pending_log_call_confirmed(ss)
     apply_pending_end_drive_ui(ss)
     apply_pending_new_game_ui(ss)
     apply_pending_session_setup_hydrate(ss)
@@ -160,3 +174,4 @@ def clear_in_progress_log_state(ss: MutableMapping[str, Any]) -> None:
     ss.pop(PENDING_LOG_SITUATION, None)
     ss.pop(LAST_DRIVE_SNAP_CONTEXT, None)
     ss.pop(UNDO_BUNDLE, None)
+    ss[PENDING_LOG_CALL_CONFIRMED] = False
