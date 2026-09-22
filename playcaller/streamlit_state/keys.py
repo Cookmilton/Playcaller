@@ -147,3 +147,5 @@ ARCHIVED_DRIVE_COMPARISON_ROWS_CACHE = "_archived_drive_comparison_rows_v1"
 # ESPN sync: merge feed into ``Game`` / ``DriveLogger`` (sidebar toggles; default on).
 UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES = "ui_live_import_completed_feed_drives"
 UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS = "ui_live_import_current_feed_drive_plays"
+# Session-scoped kill switch for 15s live polling (default off). Not a board field.
+UI_LIVE_POLLING_ENABLED = "ui_live_polling_enabled"

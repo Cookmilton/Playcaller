@@ -48,6 +48,7 @@ from playcaller.services.game_controller import (
     undo_last_logged_play,
 )
 from playcaller.services.live_feed_sync import request_live_sync
+from playcaller.services.live_polling import POLL_INTERVAL_SECONDS, polling_status_caption
 from playcaller.streamlit_state.load_game import request_load_game_json
 from playcaller.streamlit_state.keys import (
     DEFENSE_LOOK_ORIGIN,
@@ -78,6 +79,7 @@ from playcaller.streamlit_state.keys import (
     PENDING_END_DRIVE_UI,
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
+    UI_LIVE_POLLING_ENABLED,
     PENDING_LOG_SITUATION,
     PENDING_NEW_GAME_UI,
     PENDING_SESSION_SETUP_HYDRATE,
@@ -615,10 +617,22 @@ def render_sidebar(*, game: Game, drive_log: DriveLogger) -> tuple[bool, object]
                 key="sidebar_live_sync",
                 disabled=not sync_ready.can_sync,
                 on_click=request_live_sync,
+                help="Pull the selected game now and mark the board as feed-owned.",
             )
             if st.button("Mark manual", use_container_width=True, type="secondary", key="sidebar_live_mark_manual"):
                 session_mark_manual(st.session_state)
                 request_rerun_after_widgets()
+            st.toggle(
+                f"Auto-poll ESPN every {POLL_INTERVAL_SECONDS}s",
+                key=UI_LIVE_POLLING_ENABLED,
+                help=(
+                    "Kill switch (off by default). Flip mid-session — no redeploy. "
+                    "When on, refresh the selected live game unless a guard blocks it. "
+                    "Does not replace **Sync from ESPN** or **Force sync**."
+                ),
+            )
+            _bind_ui(UI_LIVE_POLLING_ENABLED)
+            st.caption(polling_status_caption(st.session_state))
             if not sync_ready.can_sync and sync_ready.block_reason:
                 st.caption(f"**Sync unavailable:** {sync_ready.block_reason}")
             err = st.session_state.get(LIVE_FEED_LAST_ERROR)

@@ -50,6 +50,7 @@ from playcaller.streamlit_state.keys import (
     UI_WAREHOUSE_ADVISORY_ENABLED,
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
+    UI_LIVE_POLLING_ENABLED,
     UI_PREVIOUS_DRIVES_FILTER,
 )
 
@@ -157,6 +158,8 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
         ss[UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES] = True
     if UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS not in ss:
         ss[UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS] = True
+    if UI_LIVE_POLLING_ENABLED not in ss:
+        ss[UI_LIVE_POLLING_ENABLED] = False
     if LIVE_FEED_SCOREBOARD_ROWS not in ss:
         ss[LIVE_FEED_SCOREBOARD_ROWS] = []
     if "ui_live_event_id_manual" not in ss:

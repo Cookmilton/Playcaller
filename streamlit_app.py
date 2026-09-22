@@ -75,6 +75,7 @@ from playcaller.services.game_controller import (
     sync_wind_slider_with_weather_pre_widgets,
 )
 from playcaller.services.live_feed_sync import run_requested_live_sync
+from playcaller.services.live_polling import POLL_INTERVAL_SECONDS, maybe_request_live_poll
 from playcaller.streamlit_state.keys import (
     GAME_CLOCK_TOTAL_SECONDS,
     GAME_CONTEXT_QUARTER,
@@ -225,4 +226,11 @@ if __name__ == "__main__":
         sidebar_generate=sidebar_generate,
     )
     populate_sidebar_export_slot(sidebar_export_slot)
+
+    @st.fragment(run_every=POLL_INTERVAL_SECONDS)
+    def run_live_polling_fragment() -> None:
+        if maybe_request_live_poll(st.session_state):
+            st.rerun(scope="app")
+
+    run_live_polling_fragment()
     maybe_rerun_after_widgets()

@@ -224,10 +224,11 @@ def test_seeding_weather_rain_does_not_warn_on_wind_write(caplog: pytest.LogCapt
     assert illegal == [], [r.getMessage() for r in illegal]
 
 
-# The only remaining ``st.rerun()`` is the post-widget helper. Other pages queue
-# ``PENDING_RERUN_AFTER_WIDGETS`` and call ``maybe_rerun_after_widgets`` at page end.
+# The only remaining ``st.rerun()`` sites are the post-widget helper and the
+# documented polling-fragment exemption (flag + app-scope rerun, nothing else).
 _RERUN_ALLOWLIST = {
     ("playcaller/services/game_controller.py", "maybe_rerun_after_widgets"),
+    ("streamlit_app.py", "run_live_polling_fragment"),
 }
 
 
