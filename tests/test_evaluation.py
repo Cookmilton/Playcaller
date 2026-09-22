@@ -130,6 +130,31 @@ def test_void_undo_and_trim() -> None:
     assert len(audit) == 1
 
 
+def test_void_last_closed_audit_by_row_id() -> None:
+    audit = [
+        {
+            "row_id": "older",
+            "status": "closed",
+            "linked_actual": {"family": "a"},
+            "actual_result": "a",
+            "completed": True,
+        },
+        {
+            "row_id": "target",
+            "status": "closed",
+            "linked_actual": {"family": "b"},
+            "actual_result": "b",
+            "completed": True,
+        },
+    ]
+    void_last_closed_audit(audit, row_id="target")
+    assert audit[0]["status"] == "closed"
+    assert audit[1]["status"] == "void_undone"
+    assert "linked_actual" not in audit[1]
+    assert "actual_result" not in audit[1]
+    assert audit[1]["completed"] is False
+
+
 def test_calibration_apply() -> None:
     cal = CalibrationProfile.from_dict({"family_offsets": {"inside_zone": 0.05}})
     ctx = GameContext(

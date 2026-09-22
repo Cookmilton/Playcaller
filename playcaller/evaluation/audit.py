@@ -276,15 +276,34 @@ def _close_snap_review_row(rec: Dict[str, Any], actual: ActualPlayResult) -> Non
     rec["completed"] = True
 
 
-def void_last_closed_audit(game_audit_list: List[Dict[str, Any]]) -> None:
-    """Mark the most recent closed audit as undone (user reversed the logged play)."""
-    for rec in reversed(game_audit_list):
-        if rec.get("status") == "closed":
-            rec["status"] = "void_undone"
-            rec.pop("linked_actual", None)
-            rec.pop("actual_result", None)
-            rec["completed"] = False
-            return
+def void_last_closed_audit(
+    game_audit_list: List[Dict[str, Any]],
+    *,
+    row_id: Optional[str] = None,
+) -> None:
+    """Mark a closed audit as undone (user reversed the logged play).
+
+    When ``row_id`` is set, void that specific closed row. Otherwise void the
+    most recent closed row (same behaviour as before the optional parameter).
+    """
+    target: Optional[Dict[str, Any]] = None
+    rid = str(row_id or "").strip()
+    if rid:
+        for rec in game_audit_list:
+            if rec.get("status") == "closed" and str(rec.get("row_id") or "") == rid:
+                target = rec
+                break
+    else:
+        for rec in reversed(game_audit_list):
+            if rec.get("status") == "closed":
+                target = rec
+                break
+    if target is None:
+        return
+    target["status"] = "void_undone"
+    target.pop("linked_actual", None)
+    target.pop("actual_result", None)
+    target["completed"] = False
 
 
 def trim_stale_open_audits(game_audit_list: List[Dict[str, Any]], plays_on_drive: int) -> None:

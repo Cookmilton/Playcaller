@@ -148,11 +148,12 @@ def close_snap_review_row_with_logged_actual(
     *,
     plays_after_log: int,
     actual: ActualPlayResult,
-) -> bool:
+) -> Optional[Dict[str, Any]]:
     """
     After ``drive_log.log(actual)`` with ``plays_after_log == len(drive_log.results)``.
 
-    See module docstring for matching rule. Returns whether a row was closed.
+    See module docstring for matching rule. Returns the closed row dict, or
+    ``None`` if nothing matched (truthy when a row was closed).
     """
     row = link_open_audit_to_actual(
         snap_review_log,
@@ -160,7 +161,7 @@ def close_snap_review_row_with_logged_actual(
         actual=actual,
     )
     log_after_log_result(row=row)
-    return row is not None
+    return row
 
 
 def apply_undo_last_logged_play_to_snap_review(

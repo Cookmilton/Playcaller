@@ -548,11 +548,12 @@ def render_recommendation_panel(
                 )
                 drive_log.log(actual)
                 sg = st.session_state.game
-                close_ok = close_snap_review_row_with_logged_actual(
+                closed_row = close_snap_review_row_with_logged_actual(
                     sg.recommendation_audit,
                     plays_after_log=len(drive_log.results),
                     actual=actual,
                 )
+                close_ok = closed_row is not None
                 last = sg.recommendation_audit[-1] if sg.recommendation_audit else None
                 merge_streamlit_snap_review_debug(
                     st.session_state,
@@ -592,6 +593,10 @@ def render_recommendation_panel(
                         update_board=True,
                         undo_pre_log_board=st.session_state.get(UNDO_BUNDLE),
                         undo_drop_last_logged_play=True,
+                        # Identity of the row this Log closed — restore voids it (K1.4).
+                        undo_closed_snap_review_row_id=str(
+                            (closed_row or {}).get("row_id") or ""
+                        ),
                     )
                     if res.refused:
                         st.warning(res.refused)
