@@ -79,7 +79,10 @@ def test_advance_actual_turnover_parks_new_possession() -> None:
         distance=7,
         actual=ActualPlayResult(yards_gained=0, first_down=False, turnover=True),
     )
-    assert snap.turnover_on_downs
+    # K1.1: a fumble-style turnover is its own reason, not "turnover on downs".
+    assert snap.change_of_possession == "turnover"
+    assert snap.turnover_on_downs is False
+    assert snap.ends_drive is True
     assert snap.down == 1
     assert snap.territory == "own"
     assert snap.yardline == 45
@@ -294,5 +297,9 @@ def test_advance_actual_field_goal_miss_change_of_possession_hint() -> None:
         distance=5,
         actual=a,
     )
-    assert snap.turnover_on_downs is True
+    # K1.1: a missed field goal is a change of possession, but NOT a turnover on
+    # downs — the two shared one boolean, so the UI announced the wrong one.
+    assert snap.change_of_possession == "field_goal_miss"
+    assert snap.turnover_on_downs is False
+    assert snap.ends_drive is True
     assert snap.down == 1

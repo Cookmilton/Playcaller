@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, replace
-from typing import Any, Dict, List, MutableMapping, Optional
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional
 
 from playcaller.evaluation.snap_review_lifecycle import trim_snap_review_opens_for_play_count
 from playcaller.game import (
@@ -30,12 +30,16 @@ from playcaller.live_data.drive_boundaries import (
 from playcaller.possession import possessing_team_from_feed_plays
 from playcaller.streamlit_state.keys import (
     DRIVE_ARCHIVE_UNDO_STACK,
+    GAME_DISTANCE,
+    GAME_DOWN,
     GAME_PERIOD,
     GAME_POSSESSION_SIDE,
     GAME_QUARTER_CLOCK_MINS,
     GAME_QUARTER_CLOCK_SECS,
     GAME_SCORE_OURS,
     GAME_SCORE_THEIRS,
+    GAME_TERRITORY,
+    GAME_YARDLINE,
     LAST_DRIVE_SNAP_CONTEXT,
     LIVE_FEED_AUTO_CLOSE_SUPPRESS_KEYS,
     LIVE_FEED_COACHED_TEAM_ESPN_ID,
@@ -45,6 +49,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_MERGED_ESPN_DRIVE_KEYS,
     LIVE_FEED_SEEN_PLAY_IDS,
     PENDING_END_DRIVE_UI,
+    PENDING_LOG_SITUATION,
     WAREHOUSE_HISTORICAL_SIGNAL,
 )
 from playcaller.streamlit_state.feed_board_copy import copy_derived_clock_to_game, skipped_feed_fields
@@ -104,6 +109,13 @@ def _snapshot_archive_state(ss: MutableMapping[str, Any]) -> Dict[str, Any]:
     return {
         "drives": copy.deepcopy(list(game.drives or [])),
         "logger_results": copy.deepcopy(list(dl.results)),
+        # Snap-review rows so an undo reopens the row this archive's final play closed.
+        "recommendation_audit": copy.deepcopy(list(game.recommendation_audit or [])),
+        # Board field position, restored through the existing backend → widget hydrate.
+        "game_down": ss.get(GAME_DOWN),
+        "game_distance": ss.get(GAME_DISTANCE),
+        "game_territory": ss.get(GAME_TERRITORY),
+        "game_yardline": ss.get(GAME_YARDLINE),
         "seen_play_ids": list(_list_copy(ss.get(LIVE_FEED_SEEN_PLAY_IDS))),
         "merged_espn_drive_keys": list(_list_copy(ss.get(LIVE_FEED_MERGED_ESPN_DRIVE_KEYS))),
         "eval_drive_epoch": int(ss.get("eval_drive_epoch", 0)),
@@ -123,10 +135,29 @@ def _snapshot_archive_state(ss: MutableMapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _push_undo(ss: MutableMapping[str, Any], *, kind: str, espn_drive_key: str) -> None:
+def _push_undo(
+    ss: MutableMapping[str, Any],
+    *,
+    kind: str,
+    espn_drive_key: str,
+    pre_log_board: Optional[Mapping[str, Any]] = None,
+    drop_last_logged_play: bool = False,
+) -> None:
+    """Push one undo entry onto the single G2.3 stack.
+
+    A Log that ends the drive archives *after* the play is already in the logger, so
+    the snapshot would otherwise capture a state the operator never saw. The two
+    options rewind the entry to the pre-Log snap instead: ``drop_last_logged_play``
+    drops that play from the restored logger, and ``pre_log_board`` restores the
+    board it was called from. One stack, one Undo — see ``restore_last_drive_archive``.
+    """
     entry = _snapshot_archive_state(ss)
     entry["kind"] = str(kind or ARCHIVE_KIND_MANUAL)
     entry["espn_drive_key"] = str(espn_drive_key or "")
+    if drop_last_logged_play and entry["logger_results"]:
+        entry["logger_results"] = entry["logger_results"][:-1]
+    if pre_log_board:
+        entry["pre_log_board"] = dict(pre_log_board)
     stack = _list_copy(ss.get(DRIVE_ARCHIVE_UNDO_STACK))
     stack.append(entry)
     ss[DRIVE_ARCHIVE_UNDO_STACK] = stack
@@ -173,6 +204,8 @@ def restore_last_drive_archive(ss: MutableMapping[str, Any]) -> bool:
     dl.reset()
     for play in list(entry.get("logger_results") or []):
         dl.log(play)
+    if "recommendation_audit" in entry:
+        game.recommendation_audit = copy.deepcopy(list(entry.get("recommendation_audit") or []))
     ss[LIVE_FEED_SEEN_PLAY_IDS] = list(entry.get("seen_play_ids") or [])
     ss[LIVE_FEED_MERGED_ESPN_DRIVE_KEYS] = list(entry.get("merged_espn_drive_keys") or [])
     ss["eval_drive_epoch"] = int(entry.get("eval_drive_epoch", 0))
@@ -200,10 +233,28 @@ def restore_last_drive_archive(ss: MutableMapping[str, Any]) -> bool:
         ss[GAME_QUARTER_CLOCK_MINS] = int(entry["game_clock_mins"])
     if entry.get("game_clock_secs") is not None:
         ss[GAME_QUARTER_CLOCK_SECS] = int(entry["game_clock_secs"])
+    # Board: prefer the pre-Log snap recorded by a Log-triggered archive, else the
+    # board as it stood when the drive was archived. Both land on ``ui_*`` through
+    # the backend → widget hydrate below, never by writing widget keys here.
+    board = entry.get("pre_log_board") or {
+        "territory": entry.get("game_territory"),
+        "yardline": entry.get("game_yardline"),
+        "down": entry.get("game_down"),
+        "distance": entry.get("game_distance"),
+    }
+    if board.get("territory") is not None:
+        ss[GAME_TERRITORY] = str(board["territory"])
+    if board.get("yardline") is not None:
+        ss[GAME_YARDLINE] = int(board["yardline"])
+    if board.get("down") is not None:
+        ss[GAME_DOWN] = int(board["down"])
+    if board.get("distance") is not None:
+        ss[GAME_DISTANCE] = int(board["distance"])
     ss[LIVE_FEED_LAST_CURRENT_DRIVE_ID] = entry.get("last_current_drive_id")
     if "last_audit" in entry:
         ss[LIVE_FEED_LAST_AUDIT] = entry.get("last_audit")
     ss.pop(PENDING_END_DRIVE_UI, None)
+    ss.pop(PENDING_LOG_SITUATION, None)
     request_widget_hydrate_from_backend(ss)
 
     if str(entry.get("kind") or "") == ARCHIVE_KIND_AUTO:
@@ -222,12 +273,19 @@ def archive_open_drive(
     feed_team_abbr: str = "",
     feed_team_display_name: str = "",
     update_board: bool = True,
+    undo_pre_log_board: Optional[Mapping[str, Any]] = None,
+    undo_drop_last_logged_play: bool = False,
 ) -> ArchiveOpenDriveResult:
     """
     Archive DriveLogger plays into ``game.drives`` and reset the live log.
 
     ``update_board`` (operator End drive) applies scoring, flips possession, and queues
     pre-widget clock/score/possession. Auto-close passes ``False`` — sync owns the board.
+
+    ``undo_pre_log_board`` / ``undo_drop_last_logged_play`` are for the K1.1 path where a
+    drive-ending Log archives the drive: they rewind this archive's single G2.3 undo entry
+    to the pre-Log snap, so one **Undo last archive** restores the open drive *and* removes
+    the play that ended it. See :func:`_push_undo`.
     """
     game = ss["game"]
     dl = ss["drive_log"]
@@ -254,7 +312,13 @@ def archive_open_drive(
         return ArchiveOpenDriveResult(archived=None, refused=refuse, kind=kind, espn_drive_key=espn_drive_key)
 
     key = str(espn_drive_key or "").strip() or resolve_open_espn_drive_key(ss, dl)
-    _push_undo(ss, kind=kind, espn_drive_key=key)
+    _push_undo(
+        ss,
+        kind=kind,
+        espn_drive_key=key,
+        pre_log_board=undo_pre_log_board,
+        drop_last_logged_play=undo_drop_last_logged_play,
+    )
 
     finished = complete_drive_from_plays(
         list(dl.results),

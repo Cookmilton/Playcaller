@@ -14,7 +14,11 @@ from playcaller import (
     GameContext,
     format_actual_play_result_description,
 )
-from playcaller.situation import yards_from_own_goal, yards_to_opponent_goal_from_abs
+from playcaller.situation import (
+    change_of_possession_copy,
+    yards_from_own_goal,
+    yards_to_opponent_goal_from_abs,
+)
 from playcaller.ui.previous_drives_render import render_drive_archive_with_replay
 from playcaller.ui.product_copy import SECTION_CURRENT_SERIES
 from playcaller.ui_components import FAM_COLOR
@@ -121,9 +125,10 @@ def post_log_summary_and_toast(actual: ActualPlayResult, snap) -> tuple[str, lis
     if snap.touchdown:
         extras.append("TD — parked at GL (New drive when ready).")
         toast.append("TD")
-    if snap.turnover_on_downs:
-        extras.append("Turnover on downs — next 1st at this spot.")
-        toast.append("TOD")
+    cop = change_of_possession_copy(getattr(snap, "change_of_possession", None))
+    if cop is not None:
+        extras.append(cop[0])
+        toast.append(cop[1])
     tg = snap.tags
     if tg.first_down_exact:
         extras.append("First down — exact sticks.")

@@ -21,6 +21,50 @@ from typing import Any, Callable, Mapping, Optional
 
 from .domain import ActualPlayResult
 
+# ── Change-of-possession reasons (``SituationSnapshot.change_of_possession``) ──
+#
+# K1.1: these replace the old overloaded ``turnover_on_downs`` boolean, which a
+# field-goal miss, a punt, and a generic turnover all set to True — so the UI
+# announced "Turnover on downs" for every one of them. Each branch now states
+# *why* possession changes; ``turnover_on_downs`` is derived from this and is
+# True only for a genuine fourth-down failure.
+COP_TURNOVER_ON_DOWNS = "turnover_on_downs"
+COP_FIELD_GOAL_MADE = "field_goal_made"
+COP_FIELD_GOAL_MISS = "field_goal_miss"
+COP_INTERCEPTION = "interception"
+COP_TURNOVER = "turnover"
+COP_PUNT = "punt"
+
+#: Reasons that end the offense's possession, so the open drive must be archived.
+DRIVE_ENDING_CHANGE_OF_POSSESSION = frozenset(
+    {
+        COP_TURNOVER_ON_DOWNS,
+        COP_FIELD_GOAL_MADE,
+        COP_FIELD_GOAL_MISS,
+        COP_INTERCEPTION,
+        COP_TURNOVER,
+        COP_PUNT,
+    }
+)
+
+#: Operator-facing recap line per reason, and a short toast chip. Each reason has
+#: its own wording — "Turnover on downs" belongs to the fourth-down failure alone.
+_CHANGE_OF_POSSESSION_COPY: dict[str, tuple[str, str]] = {
+    COP_TURNOVER_ON_DOWNS: ("Turnover on downs — defense takes over at this spot.", "TOD"),
+    COP_FIELD_GOAL_MADE: ("Field goal good — drive over, kick off next.", "FG good"),
+    COP_FIELD_GOAL_MISS: ("Field goal missed — defense takes over at the spot.", "FG miss"),
+    COP_INTERCEPTION: ("Intercepted — defense takes over.", "INT"),
+    COP_TURNOVER: ("Turnover — defense takes over.", "TO"),
+    COP_PUNT: ("Punt — defense takes over.", "Punt"),
+}
+
+
+def change_of_possession_copy(reason: Optional[str]) -> Optional[tuple[str, str]]:
+    """``(recap_line, toast_chip)`` for a change-of-possession reason, or ``None``."""
+    if not reason:
+        return None
+    return _CHANGE_OF_POSSESSION_COPY.get(str(reason))
+
 
 @dataclass(frozen=True)
 class ProgressionTags:
@@ -105,8 +149,24 @@ class SituationSnapshot:
     down: int
     distance: int
     touchdown: bool = False
-    turnover_on_downs: bool = False
+    #: Why the offense loses the ball on this play, or ``None``. One of the
+    #: ``COP_*`` constants above; see :data:`DRIVE_ENDING_CHANGE_OF_POSSESSION`.
+    change_of_possession: Optional[str] = None
     tags: ProgressionTags = field(default_factory=ProgressionTags)
+
+    @property
+    def turnover_on_downs(self) -> bool:
+        """Back-compat flag — a genuine fourth-down failure only.
+
+        Derived, never stored, so no branch can set it independently of
+        :attr:`change_of_possession` again.
+        """
+        return self.change_of_possession == COP_TURNOVER_ON_DOWNS
+
+    @property
+    def ends_drive(self) -> bool:
+        """Whether this play hands the ball to the other team."""
+        return self.change_of_possession in DRIVE_ENDING_CHANGE_OF_POSSESSION
 
 
 def yards_from_own_goal(territory: str, yardline: int) -> int:
@@ -186,7 +246,7 @@ def advance_game_state_after_actual(
             down=1,
             distance=10,
             touchdown=False,
-            turnover_on_downs=False,
+            change_of_possession=COP_FIELD_GOAL_MADE,
             tags=tags,
         )
     if rt_act == "field_goal_miss":
@@ -198,7 +258,7 @@ def advance_game_state_after_actual(
             down=1,
             distance=min(10, ytg),
             touchdown=False,
-            turnover_on_downs=True,
+            change_of_possession=COP_FIELD_GOAL_MISS,
             tags=tags,
         )
     if rt_act == "kickoff":
@@ -211,7 +271,7 @@ def advance_game_state_after_actual(
             down=1,
             distance=10,
             touchdown=False,
-            turnover_on_downs=False,
+            change_of_possession=None,
             tags=tags,
         )
     if rt_act == "punt":
@@ -222,7 +282,7 @@ def advance_game_state_after_actual(
             down=1,
             distance=10,
             touchdown=False,
-            turnover_on_downs=True,
+            change_of_possession=COP_PUNT,
             tags=tags,
         )
     if rt_act in ("extra_point", "extra_point_miss"):
@@ -233,7 +293,7 @@ def advance_game_state_after_actual(
             down=1,
             distance=10,
             touchdown=False,
-            turnover_on_downs=False,
+            change_of_possession=None,
             tags=tags,
         )
 
@@ -257,13 +317,19 @@ def advance_game_state_after_actual(
     if actual.turnover and not snap.touchdown:
         abs_y = yards_from_own_goal(snap.territory, snap.yardline)
         ytg = yards_to_opponent_goal_from_abs(abs_y)
+        kind = (actual.turnover_kind or "").strip().lower()
+        pr = (actual.pass_result or "").strip().lower()
+        if kind == "interception" or pr == "intercepted" or rt_act == "interception":
+            reason = COP_INTERCEPTION
+        else:
+            reason = COP_TURNOVER
         return SituationSnapshot(
             territory=snap.territory,
             yardline=snap.yardline,
             down=1,
             distance=min(10, ytg),
             touchdown=False,
-            turnover_on_downs=True,
+            change_of_possession=reason,
             tags=snap.tags,
         )
     return snap
@@ -288,7 +354,7 @@ def advance_game_state_after_play(
     - **Safety / own GL**: LOS clamped to own 1 if chain would go ``< 1``.
     - **Turnover on downs**: if offense fails on 4th (no new first), next snap is
       treated as **1st & 10** at the same post-play spot for the *next* offensive
-      possession (defense ball spot); ``turnover_on_downs=True`` for UI hints.
+      possession (defense ball spot); ``change_of_possession="turnover_on_downs"``.
     - **New first down**: distance is ``min(10, yards_to_goal)`` (goal-to-go cap).
     """
     t = territory if territory in ("own", "opponents") else "own"
@@ -314,7 +380,7 @@ def advance_game_state_after_play(
             down=1,
             distance=1,
             touchdown=True,
-            turnover_on_downs=False,
+            change_of_possession=None,
             tags=tags,
         )
 
@@ -340,7 +406,7 @@ def advance_game_state_after_play(
             down=1,
             distance=max(1, new_dist),
             touchdown=False,
-            turnover_on_downs=False,
+            change_of_possession=None,
             tags=tags,
         )
 
@@ -362,7 +428,7 @@ def advance_game_state_after_play(
             down=1,
             distance=min(10, ytg),
             touchdown=False,
-            turnover_on_downs=True,
+            change_of_possession=COP_TURNOVER_ON_DOWNS,
             tags=tags,
         )
 
@@ -380,7 +446,7 @@ def advance_game_state_after_play(
         down=next_down,
         distance=next_dist,
         touchdown=False,
-        turnover_on_downs=False,
+        change_of_possession=None,
         tags=tags,
     )
 

@@ -545,16 +545,44 @@ def render_recommendation_panel(
                 st.session_state[LAST_DRIVE_SNAP_CONTEXT] = {
                     "touchdown": bool(snap.touchdown),
                     "turnover_on_downs": bool(snap.turnover_on_downs),
+                    "change_of_possession": snap.change_of_possession,
                 }
-                st.session_state[PENDING_LOG_SITUATION] = {
-                    "territory": str(snap.territory),
-                    "yardline": int(snap.yardline),
-                    "down": int(snap.down),
-                    "distance": int(snap.distance),
-                }
+                # K1.1: a result that hands the ball over ends the drive here, through the
+                # one shared archive path. ``archive_open_drive`` flips possession and
+                # queues the board pre-widget, so this run must NOT also queue
+                # ``PENDING_LOG_SITUATION`` (``apply_all_pending`` applies it *before* the
+                # end-drive buffer, so a stale offensive spot would survive the archive)
+                # and must NOT auto-generate for a defense that now has the ball.
+                if snap.ends_drive:
+                    # Local import: ``drive_archive`` pulls in the services layer, which
+                    # imports back into ``playcaller.ui`` (same reason game_controller.py:74
+                    # defers it).
+                    from playcaller.services.drive_archive import (
+                        ARCHIVE_KIND_MANUAL,
+                        archive_open_drive,
+                    )
+
+                    res = archive_open_drive(
+                        st.session_state,
+                        kind=ARCHIVE_KIND_MANUAL,
+                        update_board=True,
+                        undo_pre_log_board=st.session_state.get(UNDO_BUNDLE),
+                        undo_drop_last_logged_play=True,
+                    )
+                    if res.refused:
+                        st.warning(res.refused)
+                else:
+                    st.session_state[PENDING_LOG_SITUATION] = {
+                        "territory": str(snap.territory),
+                        "yardline": int(snap.yardline),
+                        "down": int(snap.down),
+                        "distance": int(snap.distance),
+                    }
+                    assign_session_state(
+                        st.session_state, "ui_auto_generate", True, context="quick_log_play"
+                    )
                 st.session_state.result = None
                 st.session_state.pop(WAREHOUSE_HISTORICAL_SIGNAL, None)
-                assign_session_state(st.session_state, "ui_auto_generate", True, context="quick_log_play")
                 invoke_post_play_hook(
                     snap,
                     {
