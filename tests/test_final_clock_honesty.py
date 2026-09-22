@@ -7,7 +7,12 @@ from playcaller.live_data.espn_football import parse_espn_summary
 from playcaller.live_data.espn_game_state import infer_espn_period, resolve_espn_clock_seconds
 from playcaller.live_data.sync import SKIP_ABSENT_IN_SOURCE, SyncOptions, apply_snapshot
 from playcaller.state import DriveLogger
-from playcaller.streamlit_state.keys import GAME_PERIOD, GAME_QUARTER_CLOCK_MINS, GAME_QUARTER_CLOCK_SECS
+from playcaller.streamlit_state.keys import (
+    GAME_PERIOD,
+    GAME_QUARTER_CLOCK_MINS,
+    GAME_QUARTER_CLOCK_SECS,
+    LIVE_FEED_LAST_IS_FINAL,
+)
 from playcaller.ui.situation_honesty import NOT_SYNCED_TEXT, build_situation_honesty, clock_phrase_from_honesty
 
 
@@ -82,6 +87,7 @@ def test_apply_final_period_and_zero_clock() -> None:
     assert session[GAME_PERIOD] == 4
     assert session[GAME_QUARTER_CLOCK_MINS] == 0
     assert session[GAME_QUARTER_CLOCK_SECS] == 0
+    assert session[LIVE_FEED_LAST_IS_FINAL] is True
 
 
 def test_apply_final_without_period_or_clock_skips_with_reason() -> None:

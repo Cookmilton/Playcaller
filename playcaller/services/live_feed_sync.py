@@ -17,19 +17,40 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_MANUAL_EVENT_FOR_ID,
     LIVE_FEED_MANUAL_EVENT_TEAMS,
     LIVE_FEED_SCOREBOARD_ROWS,
+    LIVE_SYNC_INITIATOR,
     LIVE_SYNC_REQUESTED,
     LIVE_SYNC_TOAST,
     UI_LIVE_IMPORT_COMPLETED_FEED_DRIVES,
     UI_LIVE_IMPORT_CURRENT_FEED_DRIVE_PLAYS,
 )
+from playcaller.streamlit_state.possession import ORIGIN_FEED
+
+_POLL_INITIATOR = "poll"
 logger = logging.getLogger(__name__)
 
 
-def request_live_sync() -> None:
-    """Widget ``on_click``: queue a feed sync for the start of this script run (no ``st.rerun``)."""
+def request_live_sync(*, initiator: str = "manual") -> None:
+    """Widget ``on_click``: queue a feed sync for the start of this script run (no ``st.rerun``).
+
+    The default ``initiator="manual"`` writes only ``LIVE_SYNC_REQUESTED`` (today's Sync
+    button). A poll passes ``initiator="poll"`` so ``apply_snapshot`` is told not to
+    overwrite ``LIVE_FEED_LAST_ORIGIN``.
+    """
     import streamlit as st
 
     st.session_state[LIVE_SYNC_REQUESTED] = True
+    if initiator != "manual":
+        st.session_state[LIVE_SYNC_INITIATOR] = initiator
+
+
+def origin_for_sync_initiator(initiator: Optional[str]) -> Optional[str]:
+    """Map the queued initiator to the ``origin=`` passed into ``apply_snapshot``.
+
+    Manual / unset → ``"feed"`` (today's behaviour). Poll → ``None`` (leave origin).
+    """
+    if initiator == _POLL_INITIATOR:
+        return None
+    return ORIGIN_FEED
 
 
 def sync_readiness_from_session(ss: MutableMapping[str, Any]):
@@ -102,6 +123,7 @@ def run_requested_live_sync(ss: MutableMapping[str, Any]) -> Optional[str]:
         return None
     finally:
         ss.pop(LIVE_SYNC_REQUESTED, None)
+        ss.pop(LIVE_SYNC_INITIATOR, None)
 
 
 def _run_live_sync_body(ss: MutableMapping[str, Any]) -> Optional[str]:
@@ -131,6 +153,7 @@ def _run_live_sync_body(ss: MutableMapping[str, Any]) -> Optional[str]:
         drive_log=drive_log,
         snapshot=fr.snapshot,
         options=sync_options_from_session(ss),
+        origin=origin_for_sync_initiator(ss.get(LIVE_SYNC_INITIATOR)),
     )
     extra: list[str] = []
     if fr.raw_summary:

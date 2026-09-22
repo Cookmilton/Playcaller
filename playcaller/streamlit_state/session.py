@@ -29,6 +29,7 @@ from playcaller.streamlit_state.keys import (
     LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_LAST_AUDIT,
     LIVE_FEED_LAST_ERROR,
+    LIVE_FEED_LAST_IS_FINAL,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_LAST_CURRENT_DRIVE_ID,
     LIVE_FEED_LAST_POSSESSION_TEAM_ID,
@@ -180,6 +181,8 @@ def ensure_play_caller_session_defaults(ss: MutableMapping[str, Any]) -> None:
         ss["ui_live_home_or_away"] = "away"
     if LIVE_FEED_LAST_ORIGIN not in ss:
         ss[LIVE_FEED_LAST_ORIGIN] = None
+    if LIVE_FEED_LAST_IS_FINAL not in ss:
+        ss[LIVE_FEED_LAST_IS_FINAL] = None
     if DEFENSE_LOOK_ORIGIN not in ss:
         ss[DEFENSE_LOOK_ORIGIN] = "preset"
     if "eval_drive_epoch" not in ss:
@@ -224,3 +227,4 @@ def clear_live_feed_session_keys(ss: MutableMapping[str, Any]) -> None:
     ss[LIVE_FEED_MANUAL_EVENT_LAST_ATTEMPT_ID] = ""
     ss[LIVE_FEED_MANUAL_AUTO_FETCH_CURSOR] = ""
     ss[LIVE_FEED_LAST_ORIGIN] = None
+    ss[LIVE_FEED_LAST_IS_FINAL] = None

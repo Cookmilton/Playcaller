@@ -50,6 +50,9 @@ PENDING_LOAD_GAME = "pending_load_game"
 LOAD_GAME_ERROR = "load_game_error"
 # Sync button / polling: fetch+apply at the top of the script, then hydrate.
 LIVE_SYNC_REQUESTED = "live_sync_requested"
+# Who queued ``LIVE_SYNC_REQUESTED``: ``"manual"`` (default / unset) or ``"poll"``.
+# Threaded through ``apply_snapshot(origin=...)`` so a poll cannot clobber manual origin.
+LIVE_SYNC_INITIATOR = "live_sync_initiator"
 LIVE_SYNC_TOAST = "live_sync_toast"
 # Chip/preset handlers set this instead of calling ``st.rerun()`` mid-sidebar. Streamlit
 # treats ``st.rerun()`` as a completed run and drops widget keys that never instantiated.
@@ -106,6 +109,8 @@ LIVE_FEED_LAST_SYNC_EPOCH = "live_feed_last_sync_epoch"
 # Last ESPN clock from displayClock / numeric status only (for brief displayClock drop recovery).
 LIVE_FEED_TRUSTED_CLOCK = "live_feed_trusted_clock"
 LIVE_FEED_LAST_ORIGIN = "live_feed_last_origin"
+# Last successful sync's ``snapshot.is_final``. ``True`` / ``False`` after a sync; ``None`` if unknown.
+LIVE_FEED_LAST_IS_FINAL = "live_feed_last_is_final"
 # Set True when ESPN HTTP used verify=False (env force or automatic local fallback).
 LIVE_FEED_HTTP_INSECURE_WARNING = "live_feed_http_insecure_warning"
 LIVE_FEED_MANUAL_NOTE = "live_feed_manual_note"

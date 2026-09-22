@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, List, MutableMapping, Set, Tuple
+from typing import Any, List, MutableMapping, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ from playcaller.streamlit_state.keys import (
     GAME_YARDLINE,
     LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_LAST_AUDIT,
+    LIVE_FEED_LAST_IS_FINAL,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_LAST_CURRENT_DRIVE_ID,
     LIVE_FEED_LAST_POSSESSION_TEAM_ID,
@@ -126,12 +127,17 @@ def apply_snapshot(
     drive_log: DriveLogger,
     snapshot: NormalizedGameSnapshot,
     options: SyncOptions,
+    origin: Optional[str] = "feed",
 ) -> SyncResult:
     """
     Merge ``snapshot`` into ``game``, Streamlit widget keys on ``session``, and optionally ``drive_log``.
 
     Mutates ``session`` ``game_*`` backend keys (mirrored to ``ui_*`` on the next run before widgets),
     ``game`` fields, ``live_feed_*`` audit keys, and ``live_feed_seen_play_ids``.
+
+    ``origin`` is written to ``LIVE_FEED_LAST_ORIGIN`` when not ``None``. Callers pass
+    ``origin=None`` for a poll-initiated sync so a manual board origin is left intact.
+    The default ``"feed"`` is today's Sync / Force-sync behaviour.
     """
     applied: List[str] = []
     # Strings for whole-section skips; ``{"field", "reason"}`` dicts for situation fields.
@@ -496,7 +502,9 @@ def apply_snapshot(
     }
     session[LIVE_FEED_LAST_AUDIT] = audit
     session[LIVE_FEED_LAST_SYNC_EPOCH] = snapshot.fetched_at_epoch
-    session[LIVE_FEED_LAST_ORIGIN] = "feed"
+    if origin is not None:
+        session[LIVE_FEED_LAST_ORIGIN] = origin
+    session[LIVE_FEED_LAST_IS_FINAL] = bool(snapshot.is_final)
 
     trim_snap_review_opens_for_play_count(
         game.recommendation_audit, plays_on_drive=len(drive_log.results)

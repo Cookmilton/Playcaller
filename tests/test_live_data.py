@@ -28,6 +28,7 @@ from playcaller.streamlit_state.keys import (
     GAME_YARDLINE,
     LIVE_FEED_COACHED_TEAM_ESPN_ID,
     LIVE_FEED_LAST_AUDIT,
+    LIVE_FEED_LAST_IS_FINAL,
     LIVE_FEED_LAST_ORIGIN,
     LIVE_FEED_SEEN_PLAY_IDS,
     LIVE_FEED_TRUSTED_CLOCK,
@@ -165,6 +166,8 @@ def test_apply_snapshot_updates_session_and_game() -> None:
     assert game.offense_points == 10
     assert game.defense_points == 14
     assert session[LIVE_FEED_LAST_ORIGIN] == "feed"
+    assert session[LIVE_FEED_LAST_IS_FINAL] is False
+    assert snap.is_final is False
     aud0 = session.get(LIVE_FEED_LAST_AUDIT) or {}
     assert aud0.get("coached_team_id") == "14"
     assert aud0.get("feed_team_scope") == "our"
@@ -321,11 +324,13 @@ def test_clear_live_feed_session_keys_preserves_coached_team_espn_id() -> None:
         LIVE_FEED_COACHED_TEAM_ESPN_ID: "14",
         LIVE_FEED_LAST_AUDIT: {"coached_team_id": "14"},
         LIVE_FEED_LAST_ORIGIN: "feed",
+        LIVE_FEED_LAST_IS_FINAL: True,
         LIVE_FEED_SEEN_PLAY_IDS: ["a"],
     }
     clear_live_feed_session_keys(ss)
     assert ss.get(LIVE_FEED_COACHED_TEAM_ESPN_ID) == "14"
     assert LIVE_FEED_LAST_AUDIT not in ss
+    assert ss[LIVE_FEED_LAST_IS_FINAL] is None
 
 
 def test_coached_team_espn_id_for_previous_drives_prefers_session_over_audit() -> None:
