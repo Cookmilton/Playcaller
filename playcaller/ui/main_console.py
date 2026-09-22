@@ -16,6 +16,7 @@ from playcaller.services.game_controller import (
     run_generate_if_requested,
     undo_last_logged_play,
 )
+from playcaller.services.live_feed_sync import request_live_sync
 from playcaller.session_game_metadata import (
     compact_session_summary_line,
     session_metadata_is_identified,
@@ -132,6 +133,26 @@ def render_main_content(
     )
 
     st.markdown(f"##### {HEADLINE_LIVE_CONSOLE}")
+    force_l, force_r = st.columns([1, 3])
+    with force_l:
+        st.button(
+            "Force sync",
+            type="primary",
+            use_container_width=True,
+            key="main_console_force_sync",
+            on_click=request_live_sync,
+            help=(
+                "Pull ESPN now on the same pre-widget path as sidebar **Sync from ESPN**. "
+                "Works whether auto-poll is on or off, and ignores polling guards "
+                "(manual origin, open snap, game-final, kill switch)."
+            ),
+        )
+    with force_r:
+        st.caption(
+            "**Force sync** (here) and **Sync from ESPN** (sidebar) both queue the same feed pull "
+            "and mark the board **feed**. **Mark manual** (sidebar) is the opposite: it keeps your "
+            "edits and tells auto-poll not to overwrite them."
+        )
     leftover = leftover_feed_drive_caption(st.session_state.get(LIVE_FEED_LAST_AUDIT))
     if leftover:
         left, right = st.columns([3, 1])
@@ -272,7 +293,10 @@ def render_main_content(
             f"**Live data:** ESPN sync at {fmt_local_epoch(float(lf_ts))} — situation locks in the sidebar are respected."
         )
     elif lf_org == "manual":
-        st.caption("**Live data:** Operating as **manual** (or after **Mark manual**). Use **Sync from ESPN** to pull the broadcast again.")
+        st.caption(
+            "**Live data:** Operating as **manual** (or after **Mark manual**). "
+            "Use **Force sync** or sidebar **Sync from ESPN** to pull the broadcast again."
+        )
     st.caption(
         "**Live ops:** End the possession from the sidebar **End drive & next series** (or one-tap **End ·** buttons) — "
         "scoreboard & prior drives stay intact."
