@@ -115,7 +115,7 @@ class FourthDownAdvisor:
 # ``REPLAY_PASS_DEPTH_BY_BUCKET`` must each cover exactly this set
 # (``tests/test_bucket_label_invariant.py``) so a known bucket never hits a silent fallback.
 SITUATION_BUCKETS: frozenset[str] = frozenset(
-    {"red_zone", "backed_up", "short_yardage", "medium_yardage", "long_yardage"}
+    {"red_zone", "backed_up", "short_yardage", "early_down", "medium_yardage", "long_yardage"}
 )
 
 
@@ -143,6 +143,21 @@ class HeuristicPredictor(Predictor):
                 "power": 0.55,
                 "quick_game": 0.50,
                 "play_action": 0.46,
+            },
+            # F4.3 authored prior, not fitted. Reference rates: 2025 data/processed, PASS/RUN/SACK
+            # snaps, pass = PASS+SACK by play_type: early_down 13,911 snaps 48.2% pass
+            # (1st & 3-10 48.4%, 2nd & 3-6 47.1%) vs 3rd/4th & 3-6 1,963 snaps 83.3% pass.
+            # Run and pass families are weighted near even to match that split; every
+            # family here is scored so none is silently absent.
+            "early_down": {
+                "inside_zone": 0.50,
+                "outside_zone": 0.46,
+                "duo": 0.47,
+                "power": 0.43,
+                "quick_game": 0.49,
+                "dropback_pass": 0.46,
+                "screen": 0.43,
+                "play_action": 0.50,
             },
             "medium_yardage": {
                 "inside_zone": 0.41,
@@ -624,15 +639,15 @@ class HeuristicPredictor(Predictor):
         - ``red_zone``       — opponents' 20 or closer
         - ``backed_up``      — own 10 or closer
         - ``short_yardage``  — distance <= 2
-        - ``medium_yardage`` — distance 3-6, **or 1st down with distance <= 10**
-        - ``long_yardage``   — distance >= 7 on 2nd/3rd/4th down, and 1st & 11+
+        - ``early_down``     — 1st & 3-10, 2nd & 3-6
+        - ``medium_yardage`` — 3rd/4th & 3-6
+        - ``long_yardage``   — 1st & 11+, 2nd/3rd/4th & 7+, and any snap with no down
 
-        F4.1: distance alone used to decide the last two, so any ``distance >= 7``
-        was ``long_yardage`` — including 1st & 10, the most common snap in
-        football, which then scored against behind-schedule pass-heavy baselines.
-        A first down with 10 or fewer to go is *on schedule*; only a first down
-        pushed past 10 (a penalty) is genuinely long. Later downs are unchanged:
-        2nd & 10 and 3rd & 10 are still ``long_yardage``.
+        F4.1: distance alone used to decide the last two, so 1st & 10 was
+        ``long_yardage``. F4.3: folding 1st & 10 into ``medium_yardage`` then made it
+        68% of that bucket, and on-schedule early downs (48% pass in 2025 scrimmage
+        plays) share no baseline with 3rd/4th & medium (83% pass). A missing down is
+        never guessed into a down-specific bucket.
         """
         if ctx.territory == "opponents" and ctx.yardline <= 20:
             return "red_zone"
@@ -640,9 +655,11 @@ class HeuristicPredictor(Predictor):
             return "backed_up"
         if ctx.distance <= 2:
             return "short_yardage"
-        if 3 <= ctx.distance <= 6:
-            return "medium_yardage"
         if ctx.down == 1 and ctx.distance <= 10:
+            return "early_down"
+        if ctx.down == 2 and ctx.distance <= 6:
+            return "early_down"
+        if ctx.down in (3, 4) and ctx.distance <= 6:
             return "medium_yardage"
         return "long_yardage"
 

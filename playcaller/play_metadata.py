@@ -144,6 +144,7 @@ BUCKET_FIT_ATTR = {
     "red_zone": "red_zone_fit",
     "short_yardage": "short_yardage_fit",
     "backed_up": "backed_up_fit",
+    "early_down": "medium_fit",
     "medium_yardage": "medium_fit",
     "long_yardage": "long_fit",
 }

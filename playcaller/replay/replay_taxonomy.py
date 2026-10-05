@@ -15,6 +15,7 @@ from playcaller.domain import PASS_FAMILIES, RUN_FAMILIES, ActualPlayResult
 # Must cover exactly ``heuristic_predictor.SITUATION_BUCKETS``.
 REPLAY_PASS_DEPTH_BY_BUCKET: Dict[str, Optional[Tuple[str, FrozenSet[str]]]] = {
     "long_yardage": ("deep pass", frozenset({"dropback_pass", "play_action", "fade_iso"})),
+    "early_down": ("medium pass", frozenset({"dropback_pass", "play_action"})),
     "medium_yardage": ("medium pass", frozenset({"dropback_pass", "play_action"})),
     "short_yardage": ("short pass", frozenset(PASS_FAMILIES)),
     "red_zone": None,

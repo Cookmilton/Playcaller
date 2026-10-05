@@ -33,19 +33,19 @@ def predictor(request: pytest.FixtureRequest):
 
 def test_f41_first_and_ten_is_not_long_yardage(predictor) -> None:
     assert predictor.get_bucket(_ctx(1, 10)) != "long_yardage"
-    assert predictor.get_bucket(_ctx(1, 10)) == "medium_yardage"
+    assert predictor.get_bucket(_ctx(1, 10)) == "early_down"
 
 
 def test_f41_reported_export_case_first_and_ten_at_opp_27(predictor) -> None:
     """The exact snap from the export that surfaced F4.1."""
     bucket = predictor.get_bucket(_ctx(1, 10, territory="opponents", yardline=27))
-    assert bucket == "medium_yardage", bucket
+    assert bucket == "early_down", bucket
 
 
 @pytest.mark.parametrize("distance", [7, 8, 9, 10])
-def test_f41_first_down_on_schedule_is_medium(predictor, distance: int) -> None:
-    """1st & <=10 generally: on schedule, never long yardage."""
-    assert predictor.get_bucket(_ctx(1, distance)) == "medium_yardage"
+def test_f41_first_down_on_schedule_is_early_down(predictor, distance: int) -> None:
+    """1st & <=10 generally: on schedule, never long yardage (F4.3: ``early_down``)."""
+    assert predictor.get_bucket(_ctx(1, distance)) == "early_down"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -60,8 +60,11 @@ def test_f41_short_yardage_unchanged(predictor, distance: int) -> None:
 
 
 @pytest.mark.parametrize("distance", [3, 4, 5, 6])
-def test_f41_medium_yardage_unchanged_on_every_down(predictor, distance: int) -> None:
-    for down in (1, 2, 3, 4):
+def test_f41_three_to_six_split_by_down(predictor, distance: int) -> None:
+    """F4.3: 1st/2nd & 3-6 are ``early_down``; only 3rd/4th & 3-6 stay ``medium_yardage``."""
+    for down in (1, 2):
+        assert predictor.get_bucket(_ctx(down, distance)) == "early_down"
+    for down in (3, 4):
         assert predictor.get_bucket(_ctx(down, distance)) == "medium_yardage"
 
 
@@ -87,8 +90,8 @@ def test_f41_field_position_still_takes_precedence(predictor) -> None:
     assert predictor.get_bucket(_ctx(1, 10, territory="opponents", yardline=15)) == "red_zone"
     assert predictor.get_bucket(_ctx(1, 10, territory="own", yardline=8)) == "backed_up"
     # Boundaries of those overrides are untouched by F4.1.
-    assert predictor.get_bucket(_ctx(1, 10, territory="opponents", yardline=21)) == "medium_yardage"
-    assert predictor.get_bucket(_ctx(1, 10, territory="own", yardline=11)) == "medium_yardage"
+    assert predictor.get_bucket(_ctx(1, 10, territory="opponents", yardline=21)) == "early_down"
+    assert predictor.get_bucket(_ctx(1, 10, territory="own", yardline=11)) == "early_down"
 
 
 def test_f41_bucket_reaches_the_recommendation(predictor) -> None:
@@ -98,7 +101,7 @@ def test_f41_bucket_reaches_the_recommendation(predictor) -> None:
     if not isinstance(predictor, FootballPlayPredictor):
         pytest.skip("recommend() is the engine façade's entrypoint")
     res = predictor.recommend(_ctx(1, 10, territory="opponents", yardline=27), DriveLogger(), None)
-    assert res["bucket"] == "medium_yardage", res["bucket"]
+    assert res["bucket"] == "early_down", res["bucket"]
 
 
 def test_f41_missing_down_does_not_silently_become_a_first_down() -> None:
