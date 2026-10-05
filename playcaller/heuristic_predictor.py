@@ -111,6 +111,14 @@ class FourthDownAdvisor:
         }
 
 
+# Every label ``HeuristicPredictor.get_bucket`` can return. Baselines, ``BUCKET_FIT_ATTR`` and
+# ``REPLAY_PASS_DEPTH_BY_BUCKET`` must each cover exactly this set
+# (``tests/test_bucket_label_invariant.py``) so a known bucket never hits a silent fallback.
+SITUATION_BUCKETS: frozenset[str] = frozenset(
+    {"red_zone", "backed_up", "short_yardage", "medium_yardage", "long_yardage"}
+)
+
+
 class HeuristicPredictor(Predictor):
     """
     Default predictor: rule-based scoring + deterministic tie breaks.

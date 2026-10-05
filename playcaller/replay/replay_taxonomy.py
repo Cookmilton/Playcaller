@@ -6,9 +6,20 @@ Used only for operator surfaces and analysis structs — not for scoring or dedu
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 
 from playcaller.domain import PASS_FAMILIES, RUN_FAMILIES, ActualPlayResult
+
+# Pass-depth display label per ``get_bucket`` label: (label, pass families it applies to).
+# ``None`` is a deliberate "no depth label" — the pass family's own label is shown.
+# Must cover exactly ``heuristic_predictor.SITUATION_BUCKETS``.
+REPLAY_PASS_DEPTH_BY_BUCKET: Dict[str, Optional[Tuple[str, FrozenSet[str]]]] = {
+    "long_yardage": ("deep pass", frozenset({"dropback_pass", "play_action", "fade_iso"})),
+    "medium_yardage": ("medium pass", frozenset({"dropback_pass", "play_action"})),
+    "short_yardage": ("short pass", frozenset(PASS_FAMILIES)),
+    "red_zone": None,
+    "backed_up": None,
+}
 
 
 def _norm_play_routes(play: Mapping[str, Any]) -> str:
@@ -57,11 +68,10 @@ def replay_summary_bucket_from_recommend(result: Mapping[str, Any]) -> str:
         return "QB scramble"
 
     if fam in PASS_FAMILIES:
-        if sit == "long_yardage" and fam in ("dropback_pass", "play_action", "fade_iso"):
-            return "deep pass"
-        if sit == "medium_yardage" and fam in ("dropback_pass", "play_action"):
-            return "medium pass"
-        if sit == "short_yardage" or fam == "quick_game":
+        depth = REPLAY_PASS_DEPTH_BY_BUCKET.get(sit)
+        if depth is not None and fam in depth[1]:
+            return depth[0]
+        if fam == "quick_game":
             return "short pass"
         if fam == "dropback_pass":
             return "dropback pass"
