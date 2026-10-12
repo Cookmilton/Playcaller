@@ -366,11 +366,18 @@ def aggressiveness_label(family: str) -> str:
 
 
 def situation_bucket(ctx: Mapping[str, Any]) -> str:
-    """Human-readable situation tag for grouping in metrics."""
-    down = int(ctx.get("down", 1))
-    dist = int(ctx.get("distance", 10))
-    terr = str(ctx.get("territory", "own"))
-    yl = int(ctx.get("yardline", 25))
+    """Situation tag for metrics grouping.
+
+    Missing or ``None`` down, distance, yardline, or territory is ``"unknown"``.
+    Territory is included because it selects the field zone. The tag is a string
+    so a groupby keeps the row.
+    """
+    if any(ctx.get(key) is None for key in ("down", "distance", "yardline", "territory")):
+        return "unknown"
+    down = int(ctx["down"])
+    dist = int(ctx["distance"])
+    terr = str(ctx["territory"])
+    yl = int(ctx["yardline"])
     if terr == "opponents" and yl <= 20:
         zone = "red_zone"
     elif terr == "opponents" and yl <= 35:
